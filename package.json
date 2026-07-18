@@ -1,0 +1,17 @@
+{
+  "name": "panda-assistant",
+  "version": "0.1.0",
+  "description": "Mr. Panda — a corporate desktop assistant that helps with research, investor finding, and data collection.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Raj",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.0"
+  },
+  "dependencies": {
+    "mammoth": "^1.12.0"
+  }
+}

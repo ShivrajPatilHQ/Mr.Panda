@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Mr. Panda — Chat</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; font-family: -apple-system, "Segoe UI", sans-serif;
+    background: #ffffff; color: #1a1a1a; overflow: hidden; }
+  #wrap { display: flex; flex-direction: column; height: 100%; }
+
+  /* header */
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    background: #1c1c1c; color: #fff; -webkit-user-select: none; }
+  header .title { font-weight: 600; font-size: 13px; white-space: nowrap; }
+  header select { font-size: 11px; padding: 3px 6px; border-radius: 7px; border: 1px solid #444;
+    background: #2a2a2a; color: #eee; max-width: 150px; margin-left: auto; }
+  header button { border: none; background: #333; color: #fff; width: 26px; height: 26px;
+    border-radius: 7px; cursor: pointer; font-size: 13px; }
+  header button:hover { background: #444; }
+
+  /* settings */
+  #settings { display: none; padding: 10px 12px; background: #f7f7f8; border-bottom: 1px solid #eee; }
+  #settings.show { display: block; }
+  #settings label { font-size: 11px; color: #555; display: block; margin: 0 0 3px; }
+  #settings input[type=password], #settings input[type=text] { width: 100%; font-size: 12px;
+    padding: 6px 8px; border: 1px solid #d8d8d8; border-radius: 8px; outline: none; margin-bottom: 8px; }
+  .rowline { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .minibtn { font-size: 11px; color: #333; cursor: pointer; border: 1px solid #ddd;
+    border-radius: 8px; padding: 4px 8px; background: #fff; }
+  .minibtn:hover, .minibtn:hover { background: #eee; }
+  .shint { font-size: 10px; color: #888; line-height: 1.4; margin-bottom: 8px; }
+  #saveKey { border: none; background: #1c1c1c; color: #fff; border-radius: 8px;
+    padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  #skeyStatus { font-size: 11px; margin-left: 8px; }
+  #webToggleRow { font-size: 12px; color: #333; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+  /* log */
+  #log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px;
+    -webkit-user-select: text; user-select: text; }
+  .m { font-size: 13px; line-height: 1.55; padding: 8px 11px; border-radius: 13px;
+    max-width: 88%; white-space: pre-wrap; word-wrap: break-word; }
+  .m.user { align-self: flex-end; background: #1c1c1c; color: #fff; border-bottom-right-radius: 4px; }
+  .m.panda { align-self: flex-start; background: #f0f0f2; color: #1a1a1a; border-bottom-left-radius: 4px; }
+  .m.err { align-self: flex-start; background: #fdecec; color: #a12; }
+  .dots span { display:inline-block; width:5px; height:5px; margin:0 1px; border-radius:50%;
+    background:#999; animation: blink 1.2s infinite; }
+  .dots span:nth-child(2){ animation-delay:.2s; } .dots span:nth-child(3){ animation-delay:.4s; }
+  @keyframes blink { 0%,80%,100%{opacity:.3} 40%{opacity:1} }
+
+  /* attachments + input */
+  #attach { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 10px; }
+  #attach:empty { display: none; }
+  .chipf { font-size: 11px; background: #eef; border: 1px solid #dde; border-radius: 8px;
+    padding: 3px 6px; display: flex; align-items: center; gap: 5px; color: #334; }
+  .chipf b { cursor: pointer; color: #a44; }
+  #inbar { display: flex; align-items: flex-end; gap: 6px; padding: 8px 10px; border-top: 1px solid #eee; }
+  #clip { border: 1px solid #d8d8d8; background: #fff; border-radius: 9px; width: 34px; height: 34px;
+    cursor: pointer; font-size: 15px; flex: none; }
+  #clip:hover { background: #f2f2f2; }
+  #inp { flex: 1; font-size: 13px; padding: 8px 10px; border: 1px solid #d8d8d8; border-radius: 10px;
+    outline: none; resize: none; max-height: 96px; min-height: 34px; font-family: inherit; }
+  #inp:focus { border-color: #1c1c1c; }
+  #send { border: none; background: #1c1c1c; color: #fff; border-radius: 10px; padding: 0 14px;
+    height: 34px; font-size: 13px; cursor: pointer; flex: none; }
+  #send:hover { background: #333; } #send:disabled { opacity: .5; cursor: default; }
+  #drop { position: absolute; inset: 0; background: rgba(28,28,28,.75); color: #fff;
+    display: none; align-items: center; justify-content: center; font-size: 15px; z-index: 5; }
+  #drop.show { display: flex; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <span class="title">Mr. Panda 🐼</span>
+    <select id="modelSel" title="Model"><option>loading…</option></select>
+    <button id="gear" title="Settings">⚙</button>
+    <button id="close" title="Close">✕</button>
+  </header>
+
+  <div id="settings">
+    <label>Gemini API key</label>
+    <input id="keyInput" type="password" placeholder="paste your key here" autocomplete="off" />
+    <div class="rowline">
+      <span class="minibtn" id="listModels">↻ refresh models</span>
+      <span id="modelStatus" style="font-size:10px;color:#888;"></span>
+    </div>
+    <label id="webToggleRow"><input type="checkbox" id="webToggle" /> 🌐 Search the live web (Google)</label>
+    <div class="shint">Free key at aistudio.google.com/apikey — saved only on this Mac, only sent to Google.</div>
+    <button id="saveKey">Save</button><span id="skeyStatus"></span>
+  </div>
+
+  <div id="log"></div>
+  <div id="attach"></div>
+
+  <div id="inbar">
+    <button id="clip" title="Attach files or images">📎</button>
+    <textarea id="inp" rows="1" placeholder="Ask Mr. Panda…  (Enter to send)"></textarea>
+    <button id="send">Send</button>
+  </div>
+</div>
+<div id="drop">Drop files to attach 📎</div>
+<input id="fileInput" type="file" multiple style="display:none"
+       accept="image/*,.pdf,.txt,.md,.csv,.json,.doc,.docx" />
+
+<script>
+  const api = window.panda || {};
+  const $ = id => document.getElementById(id);
+  const log = $('log'), inp = $('inp'), send = $('send'), gear = $('gear'), closeBtn = $('close');
+  const settings = $('settings'), keyInput = $('keyInput'), modelSel = $('modelSel');
+  const listModelsBtn = $('listModels'), modelStatus = $('modelStatus'), webToggle = $('webToggle');
+  const saveKey = $('saveKey'), skeyStatus = $('skeyStatus'), clip = $('clip'), fileInput = $('fileInput');
+  const attachBar = $('attach'), drop = $('drop');
+
+  let hasKey = false, greeted = false, awaiting = false;
+  let attachments = [];   // {name, mime, dataBase64}
+
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function addMsg(role, text){ const d=document.createElement('div'); d.className='m '+role;
+    d.innerHTML=esc(text); log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
+  function addThinking(){ const d=document.createElement('div'); d.className='m panda dots';
+    d.innerHTML='<span></span><span></span><span></span>'; log.appendChild(d);
+    log.scrollTop=log.scrollHeight; return d; }
+
+  async function refreshConfig(){
+    if(!api.getConfig) return;
+    const c = await api.getConfig();
+    hasKey = !!c.hasKey;
+    webToggle.checked = c.webSearch !== false;
+    setModelOptions(c.geminiModel ? [c.geminiModel] : [], c.geminiModel);
+    skeyStatus.textContent = hasKey ? '✓ key saved' : '';
+    skeyStatus.style.color = hasKey ? '#2a7' : '#a12';
+    if(!greeted){ greeted = true; addMsg('panda', hasKey
+      ? "At your service. Ask me anything, attach a file or image, or resize this window as you like. 💼"
+      : "At your service! Open ⚙ and paste your Gemini key first, then ask away. 🐼"); }
+  }
+
+  function setModelOptions(list, current){
+    const set = new Set(list);
+    if(current) set.add(current);
+    modelSel.innerHTML = '';
+    [...set].forEach(m => { const o=document.createElement('option'); o.value=m; o.textContent=m;
+      if(m===current) o.selected=true; modelSel.appendChild(o); });
+    if(!modelSel.options.length){ const o=document.createElement('option'); o.textContent='(set key)'; modelSel.appendChild(o); }
+  }
+
+  modelSel.addEventListener('change', () => { api.saveConfig && api.saveConfig({ geminiModel: modelSel.value }); });
+  webToggle.addEventListener('change', () => { api.saveConfig && api.saveConfig({ webSearch: webToggle.checked }); });
+  gear.addEventListener('click', () => settings.classList.toggle('show'));
+  closeBtn.addEventListener('click', () => api.closeChat && api.closeChat());
+
+  listModelsBtn.addEventListener('click', async () => {
+    if(!api.listModels) return;
+    if(keyInput.value.trim() && api.saveConfig){ await api.saveConfig({geminiKey:keyInput.value.trim()}); keyInput.value=''; await refreshConfig(); }
+    modelStatus.textContent = 'loading…';
+    const r = await api.listModels();
+    if(r && r.ok && r.models.length){ setModelOptions(r.models, modelSel.value); modelStatus.textContent = r.models.length+' models'; }
+    else if(r && r.code==='NO_KEY'){ modelStatus.textContent = 'save your key first'; }
+    else { modelStatus.textContent = (r && r.error) ? r.error.slice(0,50) : 'failed'; }
+  });
+
+  saveKey.addEventListener('click', async () => {
+    const patch = { webSearch: webToggle.checked };
+    if(keyInput.value.trim()) patch.geminiKey = keyInput.value.trim();
+    if(modelSel.value) patch.geminiModel = modelSel.value;
+    if(api.saveConfig) await api.saveConfig(patch);
+    keyInput.value = ''; await refreshConfig();
+    settings.classList.remove('show');
+  });
+
+  // ---- attachments ----
+  function renderChips(){
+    attachBar.innerHTML = '';
+    attachments.forEach((a, i) => {
+      const c = document.createElement('span'); c.className = 'chipf';
+      c.innerHTML = (a.mime.startsWith('image/') ? '🖼 ' : '📄 ') + esc(a.name) + ' <b>✕</b>';
+      c.querySelector('b').addEventListener('click', () => { attachments.splice(i,1); renderChips(); });
+      attachBar.appendChild(c);
+    });
+  }
+  function guessMime(name, type){
+    if(type) return type;
+    const n = name.toLowerCase();
+    if(n.endsWith('.md')) return 'text/markdown';
+    if(n.endsWith('.csv')) return 'text/csv';
+    if(n.endsWith('.json')) return 'application/json';
+    if(n.endsWith('.txt')) return 'text/plain';
+    if(n.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if(n.endsWith('.pdf')) return 'application/pdf';
+    return 'text/plain';
+  }
+  function addFiles(files){
+    [...files].forEach(f => {
+      if(f.size > 18*1024*1024){ addMsg('err', 'Skipped '+f.name+' — over 18MB.'); return; }
+      const r = new FileReader();
+      r.onload = () => { const b64 = String(r.result).split(',')[1] || '';
+        attachments.push({ name: f.name, mime: guessMime(f.name, f.type), dataBase64: b64 }); renderChips(); };
+      r.readAsDataURL(f);
+    });
+  }
+  clip.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value=''; });
+  window.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('show'); });
+  window.addEventListener('dragleave', e => { if(e.relatedTarget===null) drop.classList.remove('show'); });
+  window.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('show'); if(e.dataTransfer) addFiles(e.dataTransfer.files); });
+
+  // ---- send ----
+  inp.addEventListener('input', () => { inp.style.height='34px'; inp.style.height=Math.min(inp.scrollHeight,96)+'px'; });
+  async function reply(){
+    const text = inp.value.trim();
+    if((!text && !attachments.length) || awaiting) return;
+    const sending = attachments.slice();
+    addMsg('user', text || '(sent '+sending.length+' file'+(sending.length>1?'s':'')+')');
+    inp.value=''; inp.style.height='34px'; attachments=[]; renderChips();
+    if(!api.ask){ addMsg('err','Chat only works in the desktop app.'); return; }
+    awaiting=true; send.disabled=true;
+    const t = addThinking();
+    const r = await api.ask(text, sending);
+    t.remove();
+    if(r && r.ok) addMsg('panda', r.text);
+    else if(r && r.code==='NO_KEY'){ addMsg('err','I need a Gemini key — open ⚙ and paste one.'); settings.classList.add('show'); }
+    else addMsg('err', "That didn't work: " + ((r && r.error) || 'unknown error'));
+    awaiting=false; send.disabled=false; inp.focus();
+  }
+  send.addEventListener('click', reply);
+  inp.addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); reply(); } });
+
+  refreshConfig();
+  // Pull the full model list once on open (if a key is already saved).
+  (async () => { if(api.listModels){ const r = await api.listModels(); if(r && r.ok && r.models.length) setModelOptions(r.models, modelSel.value); } })();
+</script>
+</body>
+</html>
