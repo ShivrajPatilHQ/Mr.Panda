@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('panda', {
   resetChat: () => ipcRenderer.send('reset-chat'),
   copyText: (text) => ipcRenderer.send('copy-text', text),
   pasteIntoBox: (text) => ipcRenderer.invoke('paste-into-box', text),
+  humanize: (payload) => ipcRenderer.invoke('humanize', payload),
   openAccessibility: () => ipcRenderer.send('open-accessibility'),
   // saved investors
   saveFromReply: (text) => ipcRenderer.invoke('save-from-reply', text),
