@@ -16,7 +16,7 @@ process.on('uncaughtException', (err) => console.error('[main] uncaught:', (err 
 process.on('unhandledRejection', (err) => console.error('[main] unhandledRejection:', (err && err.stack) || err));
 
 let win, chatWin, tray;
-let history = [];   // short rolling conversation memory
+let histories = { research: [], write: [] };   // separate conversation per tab
 
 // --- state ---
 let onScreen = true;
@@ -71,7 +71,7 @@ function createWindow() {
 // away on its own, so the two never scatter.
 function createChatWindow() {
   chatWin = new BrowserWindow({
-    width: 340, height: 470, minWidth: 260, minHeight: 320,
+    width: 380, height: 560, minWidth: 320, minHeight: 440,
     frame: false, resizable: true, show: false,
     alwaysOnTop: true, skipTaskbar: true, hasShadow: true, fullscreenable: false,
     webPreferences: {
@@ -289,9 +289,11 @@ ipcMain.on('quit-app', () => app.quit());
 ipcMain.handle('ask', async (_e, payload) => {
   const message = typeof payload === 'string' ? payload : (payload && payload.message) || '';
   const attachments = (payload && payload.attachments) || [];
+  const mode = (payload && payload.mode) === 'research' ? 'research' : 'write';
+  const history = histories[mode];
   history.push({ role: 'user', text: message || '(sent a file)' });
   try {
-    const reply = await brain.ask(history.slice(-10), attachments);
+    const reply = await brain.ask(history.slice(-10), attachments, mode);
     history.push({ role: 'assistant', text: reply });
     return { ok: true, text: reply };
   } catch (err) {
@@ -305,7 +307,10 @@ ipcMain.handle('list-models', async () => {
   try { return { ok: true, models: await brain.listModels() }; }
   catch (err) { return { ok: false, code: err.code || 'ERROR', error: String(err.message || err) }; }
 });
-ipcMain.on('reset-chat', () => { history = []; });
+ipcMain.on('reset-chat', (_e, mode) => {
+  if (mode === 'research' || mode === 'write') histories[mode] = [];
+  else histories = { research: [], write: [] };
+});
 ipcMain.on('copy-text', (_e, text) => clipboard.writeText(String(text || '')));
 
 // Paste a draft into whatever field the user has focused (Gmail, LinkedIn, any app).

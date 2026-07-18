@@ -13,11 +13,11 @@ contextBridge.exposeInMainWorld('panda', {
   toggleChat: () => ipcRenderer.send('toggle-chat'),
   // chat window
   closeChat: () => ipcRenderer.send('close-chat'),
-  ask: (message, attachments) => ipcRenderer.invoke('ask', { message, attachments }),
+  ask: (message, attachments, mode) => ipcRenderer.invoke('ask', { message, attachments, mode }),
   getConfig: () => ipcRenderer.invoke('get-config'),
   saveConfig: (patch) => ipcRenderer.invoke('save-config', patch),
   listModels: () => ipcRenderer.invoke('list-models'),
-  resetChat: () => ipcRenderer.send('reset-chat'),
+  resetChat: (mode) => ipcRenderer.send('reset-chat', mode),
   copyText: (text) => ipcRenderer.send('copy-text', text),
   pasteIntoBox: (text) => ipcRenderer.invoke('paste-into-box', text),
   humanize: (payload) => ipcRenderer.invoke('humanize', payload),
