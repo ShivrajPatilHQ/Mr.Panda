@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Mr. Panda</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: transparent; overflow: hidden;
+    -webkit-user-select: none; cursor: default; }
+  #app { width: 100%; height: 100%; display: flex; justify-content: center; align-items: flex-end; }
+  #cv { image-rendering: pixelated; cursor: grab; }
+  #cv:active { cursor: grabbing; }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="cv" width="140" height="104" title="Click to open the laptop & chat • drag to move"></canvas>
+</div>
+<script>
+  const api = window.panda || {};
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const S = 3, OX = 34, OY = 8;    // pixel scale + sprite origin (col12 lands at canvas center)
+
+  // ---- palette (The Founder variant) ----
+  const PAL = {
+    K:'#17171C', W:'#F2EFE4', N:'#17171C', S:'#0D1015', X:'#9FD8FF',
+    T:'#26262E', H:'#F6F4EC', R:'#C0392B', D:'#E8C766', G:'#2E9E4F', L:'#6FBE5C'
+  };
+
+  // ---- sprite strings (24x24, one char = one pixel) ----
+  const HEAD = [
+    "..KKKK............KKKK..",
+    ".KKKKKK..........KKKKKK.",
+    ".KKKKWWWWWWWWWWWWWWKKKK.",
+    "..KKWWWWWWWWWWWWWWWWKK..",
+    "..WWWWWWWWWWWWWWWWWWWW..",
+    "..WWSSSSSSSSSSSSSSSSWW..",
+    "..WWSXSSSSSSSSSSSSXSWW..",
+    "..WWWSSSSSSSSSSSSSSWWW..",
+    "..WWWWWWWWWWWWWWWWWWWW..",
+    "..WWWWWWWWWNNWWWWWWWWW..",
+    "..WWWWWWWWWWWWWWWWWWWW..",
+    "...WWWWWWWWWWWWWWWWWW..."
+  ];
+  const SUIT = [
+    "....TTTTTHHHHHHTTTTT....",
+    "...TTTTTTTHRRHTTTTTTT...",
+    "...TTTTTTTHRRHTTTTTTT...",
+    "..TTTTTTTTTRRTTTTTTTTT..",
+    "..TTTTTTTTTDRTTTTTTTTT..",
+    "..KKKTTTTTTTTTTTTTTKKK..",
+    "..KKKTTTTTTTTTTTTTTKKK..",
+    "....TTTTTTTTTTTTTTTT...."
+  ];
+  const LEGS_A = [
+    ".....TTTTTT..TTTTTT.....",
+    ".....TTTTTT..TTTTTT.....",
+    "....KKKKKK....KKKKKK....",
+    "....KKKKKK....KKKKKK...."
+  ];
+  const LEGS_B = [
+    "....TTTTTT....TTTTTT....",
+    "....TTTTTT....TTTTTT....",
+    "...KKKKKK......KKKKKK...",
+    "...KKKKKK......KKKKKK..."
+  ];
+  const SIT_TOP = [
+    "....TTTTTHHHHHHTTTTT....",
+    "...TTTTTTTHRRHTTTTTTT...",
+    "...TTTTTTTHRRHTTTTTTT..."
+  ];
+  const SIT_LOWER = [
+    "..TTTTTTTTTRRTTTTTTTTT..",
+    "..TTTTTTTTTDRTTTTTTTTT..",
+    ".KKKTTTTTTTTTTTTTTTTKKK.",
+    ".KKTTTTTTTTTTTTTTTTTTKK.",
+    ".KKTTTTTTTTTTTTTTTTTTKK.",
+    "..TTTTTTTTTTTTTTTTTTTT..",
+    "..KKKKKK........KKKKKK..",
+    "..KKKKKK........KKKKKK.."
+  ];
+  const SIT_POSE = HEAD.concat(SIT_TOP, SIT_LOWER);
+
+  const EAT_A = [[13,3,'L'],[14,4,'L'],[12,4,'L'],[13,5,'G'],[13,6,'G'],[13,7,'G'],[13,8,'G'],[13,9,'G'],
+                 [12,11,'K'],[13,11,'K'],[14,11,'K']];
+  const EAT_B = [[13,4,'L'],[14,5,'L'],[12,5,'L'],[13,6,'G'],[13,7,'G'],[13,8,'G'],[13,9,'G'],[13,10,'G'],
+                 [12,12,'K'],[13,12,'K'],[14,12,'K'],[11,10,'K'],[12,10,'K']];
+
+  // ---- draw helpers (in facing-right coords; mirror flips the whole canvas) ----
+  function fillPx(px, py, color){ ctx.fillStyle = color; ctx.fillRect(OX + px*S, OY + py*S, S, S); }
+  function fillR(px, py, w, h, color){ ctx.fillStyle = color; ctx.fillRect(OX + px*S, OY + py*S, w*S, h*S); }
+  function drawRows(rows, rowOffset, bob){
+    for (let y = 0; y < rows.length; y++){
+      const row = rows[y];
+      for (let x = 0; x < row.length; x++){
+        const ch = row[x]; if (ch === '.') continue;
+        const c = PAL[ch]; if (c) fillPx(x, rowOffset + y + bob, c);
+      }
+    }
+  }
+  function drawBriefcase(spx, spy){
+    fillR(spx, spy, 9, 7, '#3A2312');
+    fillR(spx+1, spy+1, 7, 5, '#7A4A26');
+    fillR(spx+3, spy-2, 3, 2, '#3A2312');
+    fillR(spx+4, spy-1, 1, 1, '#7A4A26');
+    fillR(spx+4, spy+3, 1, 1, '#E8C766');
+  }
+  function drawLaptop(){
+    const h = Math.min(6, laptopT);
+    fillR(7, 19, 11, 2, '#6A6A76');                 // keyboard deck (light grey = reads as laptop)
+    fillR(7, 18, 11, 1, '#8A8A96');                 // front lip / hinge
+    if (h > 0){
+      fillR(9, 18 - h, 8, h, '#2E2E38');            // screen lid rising up
+      fillR(9, 18 - h, 8, 1, '#8A8A96');            // lid top edge
+      if (h > 2) fillR(10, 18 - h + 1, 6, h - 2, '#9FD8FF'); // lit screen
+    }
+  }
+
+  // ---- state (driven by the main process) ----
+  let state = 'idle';   // idle | walk | eat | work
+  let faceLeft = false;
+  let tick = 0;
+  let laptopT = 0;
+  let crumbs = [];
+
+  api.onState && api.onState((s) => {
+    if (s === 'walk-left')  { state = 'walk'; faceLeft = true; }
+    else if (s === 'walk-right') { state = 'walk'; faceLeft = false; }
+    else if (s === 'eat')  { state = 'eat'; }
+    else if (s === 'work') { state = 'work'; laptopT = 0; }
+    else { state = 'idle'; }
+  });
+
+  function update(){
+    if (state === 'work') { if (laptopT < 6) laptopT += 0.6; } else { laptopT = 0; }
+    if (state === 'eat' && tick % 16 === 0){
+      for (let i = 0; i < 2; i++) crumbs.push({ x: 12 + Math.random()*2, y: 12, vy: 0.15 + Math.random()*0.2, life: 46 });
+    }
+    crumbs.forEach(c => { c.y += c.vy; c.life--; });
+    crumbs = crumbs.filter(c => c.life > 0);
+  }
+
+  function render(){
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    if (faceLeft){ ctx.translate(W, 0); ctx.scale(-1, 1); }
+
+    if (state === 'eat' || state === 'work'){
+      drawRows(SIT_POSE, 0, 0);
+      drawBriefcase(-6, 15);                 // parked behind him
+      if (state === 'eat'){
+        const arr = (Math.floor(tick/8) % 2 === 1) ? EAT_B : EAT_A;
+        arr.forEach(([x,y,k]) => fillPx(x, y, PAL[k]));
+      } else {
+        drawLaptop();                        // open laptop out of the bag
+      }
+    } else {
+      const legB = (state === 'walk') && (Math.floor(tick/9) % 2 === 1);
+      const bob = legB ? 1 : 0;              // bob down 1px on walk frame B
+      drawRows(HEAD, 0, bob);
+      drawRows(SUIT, 12, bob);
+      drawRows(legB ? LEGS_B : LEGS_A, 20, bob);
+      const drop = legB ? 1 : 0;             // briefcase drops 1px on frame B
+      drawBriefcase(22, 18 + (state === 'walk' ? drop + bob : 0));
+    }
+
+    // crumbs (during eating)
+    crumbs.forEach(c => { ctx.fillStyle = '#6FBE5C'; ctx.fillRect(OX + Math.floor(c.x)*S, OY + Math.floor(c.y)*S, S, S); });
+    ctx.restore();
+  }
+
+  // 30 fps tick loop (per spec)
+  setInterval(() => { tick++; update(); render(); }, 1000/30);
+  render();
+
+  // ---- interaction: quick tap = open laptop + chat; hold+move = drag ----
+  function poke(){ api.interact && api.interact(); }
+  let down = false, startX = 0, startY = 0;
+  cv.addEventListener('mousedown', (e) => {
+    down = true; startX = e.screenX; startY = e.screenY;
+    api.dragStart && api.dragStart(); poke(); e.preventDefault();
+  });
+  window.addEventListener('mouseup', (e) => {
+    if (!down) return; down = false;
+    api.dragEnd && api.dragEnd();
+    if (Math.abs(e.screenX - startX) + Math.abs(e.screenY - startY) < 6) api.toggleChat && api.toggleChat();
+  });
+  cv.addEventListener('contextmenu', (e) => { e.preventDefault(); api.showMenu && api.showMenu(); });
+</script>
+</body>
+</html>
