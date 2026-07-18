@@ -17,5 +17,14 @@ contextBridge.exposeInMainWorld('panda', {
   getConfig: () => ipcRenderer.invoke('get-config'),
   saveConfig: (patch) => ipcRenderer.invoke('save-config', patch),
   listModels: () => ipcRenderer.invoke('list-models'),
-  resetChat: () => ipcRenderer.send('reset-chat')
+  resetChat: () => ipcRenderer.send('reset-chat'),
+  copyText: (text) => ipcRenderer.send('copy-text', text),
+  pasteIntoBox: (text) => ipcRenderer.invoke('paste-into-box', text),
+  openAccessibility: () => ipcRenderer.send('open-accessibility'),
+  // saved investors
+  saveFromReply: (text) => ipcRenderer.invoke('save-from-reply', text),
+  listInvestors: () => ipcRenderer.invoke('list-investors'),
+  removeInvestor: (id) => ipcRenderer.invoke('remove-investor', id),
+  clearInvestors: () => ipcRenderer.invoke('clear-investors'),
+  exportCsv: () => ipcRenderer.invoke('export-csv')
 });

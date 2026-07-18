@@ -1,5 +1,22 @@
 # Mr. Panda — Changelog
 
+## v1.1 — 2026-07-18
+
+- **Pixel-art Mr. Panda** — 24×24 sprite ("The Founder" palette) replaces the vector
+  character. Walk / idle / eat / work poses; clicking him opens his laptop + the chat.
+- **Roaming reaches everywhere** — margin-aware bounds so the sprite hits the top, edges
+  and corners (previously stuck mid-screen).
+- **Saved contacts/investors** — 📌 Save button pulls people/contacts (incl. emails,
+  handles, links) out of a reply into a deduped list; 📋 list view; ⬇ Export CSV.
+- **Email / message writer** — drafts ready-to-send emails and LinkedIn messages;
+  📋 Copy and ⌨️ Paste-into-box (system paste via a one-time macOS Accessibility grant).
+- **Reliability fixes** — message cut-off fixed (token budget 900→4096 + truncation
+  handling), request timeout so the chat can't hang, main-process crash guards + global
+  safety net (setPosition NaN), chat no longer fights the user on resize, laptop closes
+  when the chat closes.
+- **Packaged** as a standalone double-click **Mr Panda.app** (ad-hoc signed, custom
+  pixel-panda icon) — no Terminal/npm needed to run.
+
 ## v1 — 2026-07-18
 
 First stable version. A pixel-art desktop panda assistant for macOS.
