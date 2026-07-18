@@ -335,6 +335,53 @@ ipcMain.handle('paste-into-box', async (_e, text) => {
   try { if (chatWasOpen && chatWin && !chatWin.isDestroyed()) chatWin.show(); } catch (_e) {}
   return result;
 });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function runKey(letter) {
+  return new Promise((resolve) => {
+    exec(`osascript -e 'tell application "System Events" to keystroke "${letter}" using command down'`, (err, _o, stderr) => {
+      if (!err) return resolve({ ok: true });
+      const msg = ((stderr || err.message || '') + '').toLowerCase();
+      if (/assistive|not allowed|accessibility|1719|-25211/.test(msg)) return resolve({ ok: false, code: 'NO_PERMISSION' });
+      resolve({ ok: false, error: (stderr || err.message || 'failed').slice(0, 140) });
+    });
+  });
+}
+function restoreApp(showChat) {
+  try { app.show(); } catch (_e) {}
+  try { if (win && !win.isDestroyed()) win.showInactive(); } catch (_e) {}
+  try { if (showChat && chatWin && !chatWin.isDestroyed()) chatWin.show(); } catch (_e) {}
+}
+
+// Humanize: grab the user's selection (Cmd+C), rewrite it via the brain, and
+// paste the human version back over the selection (Cmd+V) — all in the app they
+// were using. Same Accessibility permission as paste.
+ipcMain.handle('humanize', async (_e, payload) => {
+  const mode = (payload && payload.mode) || 'human';
+  const opts = { imperfect: !!(payload && payload.imperfect), custom: payload && payload.custom };
+  const chatWasOpen = chatOpen;
+
+  try { app.hide(); } catch (_e) {}          // hand focus (and the live selection) back
+  await sleep(380);
+
+  const sentinel = '__panda_nosel_' + Date.now();
+  clipboard.writeText(sentinel);
+  const cp = await runKey('c');              // copy the selection
+  if (!cp.ok) { restoreApp(chatWasOpen); return cp; }
+  await sleep(280);
+  const selected = clipboard.readText();
+  if (!selected || selected === sentinel || !selected.trim()) { restoreApp(chatWasOpen); return { ok: false, code: 'NO_SELECTION' }; }
+
+  let out;
+  try { out = await brain.humanize(selected, mode, opts); }
+  catch (err) { restoreApp(chatWasOpen); return { ok: false, code: err.code || 'ERROR', error: String(err.message || err) }; }
+
+  clipboard.writeText(out);
+  const paste = await runKey('v');           // replace the selection with the rewrite
+  await sleep(150);
+  restoreApp(chatWasOpen);
+  return paste.ok ? { ok: true, before: selected, after: out } : paste;
+});
+
 ipcMain.on('open-accessibility', () =>
   shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'));
 

@@ -53,6 +53,19 @@
   .savebtn:hover { background: #ececf6; }
   .savebtn:disabled { opacity: .6; cursor: default; }
 
+  /* humanize */
+  #humanBtn { width: auto !important; padding: 0 8px; }
+  #humanPanel { display: none; padding: 10px 12px; background: #f7f7f8; border-bottom: 1px solid #eee; }
+  #humanPanel.show { display: block; }
+  .hhint { font-size: 11px; color: #777; line-height: 1.4; margin-bottom: 8px; }
+  .hmodes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .hmode { font-size: 12px; padding: 5px 10px; border: 1px solid #d8d8d8; border-radius: 9px;
+    background: #fff; cursor: pointer; color: #333; }
+  .hmode:hover { background: #eef; border-color: #1c1c1c; }
+  .hrow { font-size: 12px; color: #333; display: flex; align-items: center; gap: 6px; cursor: pointer; margin-bottom: 6px; }
+  #humanCustom { width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid #d8d8d8; border-radius: 8px; outline: none; margin-bottom: 8px; }
+  #humanStatus { font-size: 11px; color: #666; min-height: 14px; }
+
   /* log */
   #log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px;
     -webkit-user-select: text; user-select: text; }
@@ -92,6 +105,7 @@
   <header>
     <span class="title">Mr. Panda 🐼</span>
     <select id="modelSel" title="Model"><option>loading…</option></select>
+    <button id="humanBtn" title="Humanize selected text">✨</button>
     <button id="listBtn" title="Saved investors">📋 <span id="listCount">0</span></button>
     <button id="gear" title="Settings">⚙</button>
     <button id="close" title="Close">✕</button>
@@ -118,6 +132,20 @@
       </span>
     </div>
     <div id="invList"></div>
+  </div>
+
+  <div id="humanPanel">
+    <div class="hhint">Select text in any app (Gmail, LinkedIn…), then pick a voice — I'll rewrite it and paste it back over your selection.</div>
+    <div class="hmodes">
+      <span class="hmode" data-mode="subtle">Subtle</span>
+      <span class="hmode" data-mode="human">Human</span>
+      <span class="hmode" data-mode="ceo">CEO</span>
+      <span class="hmode" data-mode="founder">Founder</span>
+      <span class="hmode" data-mode="custom">Custom…</span>
+    </div>
+    <input id="humanCustom" placeholder="describe the voice, then press Enter…" style="display:none" />
+    <label class="hrow"><input type="checkbox" id="imperfect" /> add human imperfections</label>
+    <div id="humanStatus"></div>
   </div>
 
   <div id="log"></div>
@@ -331,6 +359,39 @@
       el.appendChild(b);
     }
   }
+
+  // ---- humanize ----
+  const humanBtn = $('humanBtn'), humanPanel = $('humanPanel'), humanCustom = $('humanCustom'),
+        imperfect = $('imperfect'), humanStatus = $('humanStatus');
+  humanBtn.addEventListener('click', () => {
+    const show = !humanPanel.classList.contains('show');
+    humanPanel.classList.toggle('show', show);
+    if(show){ settings.classList.remove('show'); listPanel.classList.remove('show'); }
+  });
+  async function runHumanize(mode, custom){
+    if(!api.humanize){ humanStatus.textContent = 'desktop app only'; return; }
+    humanStatus.textContent = 'on it — grabbing your selection…';
+    const r = await api.humanize({ mode, custom, imperfect: imperfect.checked });
+    if(r && r.ok){ humanStatus.textContent = '✓ humanized & pasted back'; }
+    else if(r && r.code === 'NO_SELECTION'){ humanStatus.textContent = 'select some text first, then pick a voice'; }
+    else if(r && r.code === 'NO_PERMISSION'){
+      humanStatus.textContent = 'needs Accessibility';
+      addMsg('err', 'To grab & paste I need Accessibility access — turn on “Mr Panda” in the settings I just opened, then try again.');
+      if(api.openAccessibility) api.openAccessibility();
+    }
+    else if(r && r.code === 'NO_KEY'){ humanStatus.textContent = 'set your Gemini key first (⚙)'; }
+    else { humanStatus.textContent = (r && r.error) ? r.error.slice(0, 60) : 'failed'; }
+  }
+  document.querySelectorAll('.hmode').forEach(el => {
+    el.addEventListener('click', () => {
+      const mode = el.getAttribute('data-mode');
+      if(mode === 'custom'){ humanCustom.style.display = 'block'; humanCustom.focus(); return; }
+      runHumanize(mode);
+    });
+  });
+  humanCustom.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter'){ e.preventDefault(); const v = humanCustom.value.trim(); if(v) runHumanize('custom', v); }
+  });
 
   refreshConfig();
   refreshCount();

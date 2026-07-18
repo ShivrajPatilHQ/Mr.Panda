@@ -213,4 +213,41 @@ async function extractInvestors(text) {
   return Array.isArray(arr) ? arr : [];
 }
 
-module.exports = { init, getConfig, saveConfig, ask, listModels, extractInvestors };
+// ---- humanizer (Sinceerly-style: rewrite AI-ish text to read like a person) ----
+const HUMANIZE_MODES = {
+  subtle: "Voice: keep it professional but trim filler and hedging, use contractions, prefer plain words, and vary sentence length so it doesn't read as machine-uniform.",
+  human: "Voice: warm and conversational, like a sharp human talking to a colleague. Loosen stiff corporate phrasing, use natural rhythm, drop clichés and AI tells.",
+  ceo: "Voice: a busy founder/CEO — very short, direct, mostly lowercase, no fluff and no pleasantries. Cut to essentials. It may end with 'sent from my iphone'.",
+  founder: "Voice: punchy, confident founder energy — direct, specific, high-energy, short sentences, no corporate hedging."
+};
+
+async function humanize(text, mode, opts) {
+  if (cfg.provider !== 'gemini') { const e = new Error('Only Gemini supported now.'); e.code = 'NO_PROVIDER'; throw e; }
+  if (!cfg.geminiKey) { const e = new Error('No API key set.'); e.code = 'NO_KEY'; throw e; }
+  const model = cfg.geminiModel || 'gemini-2.0-flash';
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
+    encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(cfg.geminiKey);
+
+  const modeText = (mode === 'custom' && opts && opts.custom) ? ('Voice: ' + opts.custom) : (HUMANIZE_MODES[mode] || HUMANIZE_MODES.human);
+  let sys = 'You rewrite text so it reads as authentically human, not AI-generated. ' +
+    'Return ONLY the rewritten text — no preamble, no quotes, no notes. Keep the original meaning and any key facts. ' +
+    'Remove every em-dash (use a comma, period, or rephrase). ' + modeText;
+  if (opts && opts.imperfect) {
+    sys += ' Add one or two small, natural human imperfections (a casual aside, a slightly informal phrasing, or a minor typo) so it does not read as machine-perfect — subtle, still readable.';
+  }
+
+  const body = {
+    system_instruction: { parts: [{ text: sys }] },
+    contents: [{ role: 'user', parts: [{ text: text }] }],
+    generationConfig: { temperature: 0.9, maxOutputTokens: 2048 }
+  };
+
+  const data = await postGemini(url, body);
+  const cand = data && data.candidates && data.candidates[0];
+  let out = cand && cand.content && cand.content.parts ? cand.content.parts.map(p => p.text || '').join('') : '';
+  out = out.trim().replace(/^["']|["']$/g, '');
+  if (!out) { const e = new Error('Empty rewrite.'); e.code = 'EMPTY'; throw e; }
+  return out;
+}
+
+module.exports = { init, getConfig, saveConfig, ask, listModels, extractInvestors, humanize };
