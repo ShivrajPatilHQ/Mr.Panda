@@ -311,8 +311,7 @@ ipcMain.on('copy-text', (_e, text) => clipboard.writeText(String(text || '')));
 // Paste a draft into whatever field the user has focused (Gmail, LinkedIn, any app).
 // Puts the text on the clipboard, then fires the system Cmd+V via AppleScript.
 // Needs the one-time macOS Accessibility permission.
-ipcMain.handle('paste-into-box', async (_e, text) => {
-  if (typeof text === 'string' && text) clipboard.writeText(text);
+function runPaste() {
   return new Promise((resolve) => {
     exec(`osascript -e 'tell application "System Events" to keystroke "v" using command down'`, (err, _out, stderr) => {
       if (!err) return resolve({ ok: true });
@@ -321,6 +320,20 @@ ipcMain.handle('paste-into-box', async (_e, text) => {
       resolve({ ok: false, error: (stderr || err.message || 'paste failed').slice(0, 140) });
     });
   });
+}
+ipcMain.handle('paste-into-box', async (_e, text) => {
+  if (typeof text === 'string' && text) clipboard.writeText(text);
+  const chatWasOpen = chatOpen;
+  // Hide our app so macOS returns focus to the app the user was in before the
+  // panda (with its text cursor intact) — then paste there, then come back.
+  try { app.hide(); } catch (_e) {}
+  await new Promise(r => setTimeout(r, 400));
+  const result = await runPaste();
+  await new Promise(r => setTimeout(r, 150));
+  try { app.show(); } catch (_e) {}
+  try { if (win && !win.isDestroyed()) win.showInactive(); } catch (_e) {}
+  try { if (chatWasOpen && chatWin && !chatWin.isDestroyed()) chatWin.show(); } catch (_e) {}
+  return result;
 });
 ipcMain.on('open-accessibility', () =>
   shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'));
