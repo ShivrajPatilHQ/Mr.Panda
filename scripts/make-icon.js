@@ -44,20 +44,8 @@ function set(x, y, r, g, b, a) {
   const i = (y * SIZE + x) * 4; buf[i] = r; buf[i+1] = g; buf[i+2] = b; buf[i+3] = a == null ? 255 : a;
 }
 
-// rounded-square background
-const M = 92, R = 200, x0 = M, y0 = M, x1 = SIZE - M, y1 = SIZE - M;
-const BG = [30, 111, 230];
-function inRound(x, y) {
-  if (x >= x0 && x < x1 && y >= y0 + R && y < y1 - R) return true;
-  if (x >= x0 + R && x < x1 - R && y >= y0 && y < y1) return true;
-  const cs = [[x0+R,y0+R],[x1-R,y0+R],[x0+R,y1-R],[x1-R,y1-R]];
-  for (const [cx, cy] of cs) { const dx = x-cx, dy = y-cy; if (dx*dx + dy*dy <= R*R) return true; }
-  return false;
-}
-for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) if (inRound(x, y)) set(x, y, BG[0], BG[1], BG[2], 255);
-
-// pixel panda, centered
-const BLOCK = 26, PW = 24 * BLOCK, ox = Math.round((SIZE - PW) / 2), oy = Math.round((SIZE - PW) / 2);
+// transparent background — just the pixel panda, centered
+const BLOCK = 32, PW = 24 * BLOCK, ox = Math.round((SIZE - PW) / 2), oy = Math.round((SIZE - PW) / 2);
 for (let row = 0; row < SPRITE.length; row++) {
   for (let col = 0; col < SPRITE[row].length; col++) {
     const ch = SPRITE[row][col]; if (ch === '.') continue;
