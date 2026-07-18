@@ -3,9 +3,17 @@
 // is fully CLICKABLE, hand-draggable, and can tuck into the macOS menu bar.
 // Nothing here touches your system — it just moves a small floating window.
 
-const { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen, dialog, clipboard, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const { exec } = require('child_process');
 const brain = require('./brain');
+const store = require('./store');
+
+// Safety net: a stray error in a timer/callback must not pop a crash dialog and
+// kill the whole app. Log it and keep the panda running.
+process.on('uncaughtException', (err) => console.error('[main] uncaught:', (err && err.stack) || err));
+process.on('unhandledRejection', (err) => console.error('[main] unhandledRejection:', (err && err.stack) || err));
 
 let win, chatWin, tray;
 let history = [];   // short rolling conversation memory
@@ -108,6 +116,11 @@ function toggleChat() {
 // ---- helpers ----
 function pos() { const b = win.getBounds(); return { x: b.x, y: b.y }; }
 function tell(state) { if (win && !win.isDestroyed()) win.webContents.send('state', state); }
+// setPosition throws on NaN/Infinity or a dead window — never let that crash the app.
+function safeSetPos(x, y) {
+  if (!win || win.isDestroyed() || !Number.isFinite(x) || !Number.isFinite(y)) return;
+  win.setPosition(Math.round(x), Math.round(y));
+}
 function clamp(x, y) {
   const b = bounds();
   return { x: Math.min(Math.max(x, b.xmin), b.xmax), y: Math.min(Math.max(y, b.ymin), b.ymax) };
@@ -117,6 +130,8 @@ function clamp(x, y) {
 function walkTo(tx, ty, onArrive) {
   clearInterval(moveTimer);
   const { x: sx, y: sy } = pos();
+  // Bail safely if any coordinate is not a real number (prevents setPosition crash).
+  if (![sx, sy, tx, ty].every(Number.isFinite)) { if (onArrive) onArrive(); return; }
   const dist = Math.hypot(tx - sx, ty - sy);
   if (dist < 4) { if (onArrive) onArrive(); return; }
   const dur = Math.max(600, dist * 14);      // slower = calmer stroll
@@ -125,16 +140,18 @@ function walkTo(tx, ty, onArrive) {
   const t0 = Date.now();
   tell(tx >= sx ? 'walk-right' : 'walk-left');
   moveTimer = setInterval(() => {
-    let t = (Date.now() - t0) / dur;
-    if (t >= 1) {
-      win.setPosition(Math.round(tx), Math.round(ty));
-      clearInterval(moveTimer);
-      if (onArrive) onArrive();
-      return;
-    }
-    const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;  // easeInOutQuad
-    const hop = Math.abs(Math.sin(t * Math.PI * hops)) * amp;
-    win.setPosition(Math.round(sx + (tx - sx) * e), Math.round(sy + (ty - sy) * e - hop));
+    try {
+      let t = (Date.now() - t0) / dur;
+      if (t >= 1) {
+        safeSetPos(tx, ty);
+        clearInterval(moveTimer);
+        if (onArrive) onArrive();
+        return;
+      }
+      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;  // easeInOutQuad
+      const hop = Math.abs(Math.sin(t * Math.PI * hops)) * amp;
+      safeSetPos(sx + (tx - sx) * e, sy + (ty - sy) * e - hop);
+    } catch (_e) { clearInterval(moveTimer); }
   }, TICK);
 }
 
@@ -241,11 +258,13 @@ ipcMain.on('drag-start', () => {
   dragOffset = { x: c.x - b.x, y: c.y - b.y };
   clearInterval(dragTimer);
   dragTimer = setInterval(() => {
-    if (!dragging) return;
-    const cc = screen.getCursorScreenPoint();
-    const p = clamp(cc.x - dragOffset.x, cc.y - dragOffset.y);
-    win.setPosition(p.x, p.y);
-    positionChat(); // keep the chat leashed to the panda while dragging
+    try {
+      if (!dragging) return;
+      const cc = screen.getCursorScreenPoint();
+      const p = clamp(cc.x - dragOffset.x, cc.y - dragOffset.y);
+      safeSetPos(p.x, p.y);
+      positionChat(); // keep the chat leashed to the panda while dragging
+    } catch (_e) { clearInterval(dragTimer); }
   }, TICK);
 });
 ipcMain.on('drag-end', () => {
@@ -287,10 +306,51 @@ ipcMain.handle('list-models', async () => {
   catch (err) { return { ok: false, code: err.code || 'ERROR', error: String(err.message || err) }; }
 });
 ipcMain.on('reset-chat', () => { history = []; });
+ipcMain.on('copy-text', (_e, text) => clipboard.writeText(String(text || '')));
+
+// Paste a draft into whatever field the user has focused (Gmail, LinkedIn, any app).
+// Puts the text on the clipboard, then fires the system Cmd+V via AppleScript.
+// Needs the one-time macOS Accessibility permission.
+ipcMain.handle('paste-into-box', async (_e, text) => {
+  if (typeof text === 'string' && text) clipboard.writeText(text);
+  return new Promise((resolve) => {
+    exec(`osascript -e 'tell application "System Events" to keystroke "v" using command down'`, (err, _out, stderr) => {
+      if (!err) return resolve({ ok: true });
+      const msg = ((stderr || err.message || '') + '').toLowerCase();
+      if (/assistive|not allowed|accessibility|1719|-25211/.test(msg)) return resolve({ ok: false, code: 'NO_PERMISSION' });
+      resolve({ ok: false, error: (stderr || err.message || 'paste failed').slice(0, 140) });
+    });
+  });
+});
+ipcMain.on('open-accessibility', () =>
+  shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'));
+
+// ---- saved investors (Phase 5) ----
+ipcMain.handle('save-from-reply', async (_e, text) => {
+  try {
+    const found = await brain.extractInvestors(text || '');
+    const added = store.add(found);
+    return { ok: true, found: found.length, added, total: store.list().length };
+  } catch (err) { return { ok: false, code: err.code || 'ERROR', error: String(err.message || err) }; }
+});
+ipcMain.handle('list-investors', () => store.list());
+ipcMain.handle('remove-investor', (_e, id) => store.remove(id));
+ipcMain.handle('clear-investors', () => store.clear());
+ipcMain.handle('export-csv', async () => {
+  if (!store.list().length) return { ok: false, error: 'No saved investors yet.' };
+  const { canceled, filePath } = await dialog.showSaveDialog(chatWin, {
+    title: 'Export investors', defaultPath: 'investors.csv',
+    filters: [{ name: 'CSV', extensions: ['csv'] }]
+  });
+  if (canceled || !filePath) return { ok: false, canceled: true };
+  try { fs.writeFileSync(filePath, store.toCSV()); return { ok: true, path: filePath, count: store.list().length }; }
+  catch (err) { return { ok: false, error: String(err.message || err) }; }
+});
 
 app.whenReady().then(() => {
   if (app.dock) app.dock.hide();
   brain.init(app.getPath('userData'));
+  store.init(app.getPath('userData'));
   createWindow();
   createChatWindow();
   createTray();

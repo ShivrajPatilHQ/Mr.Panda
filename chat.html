@@ -35,6 +35,24 @@
   #skeyStatus { font-size: 11px; margin-left: 8px; }
   #webToggleRow { font-size: 12px; color: #333; display: flex; align-items: center; gap: 6px; cursor: pointer; }
 
+  /* saved-investor list */
+  #listBtn { width: auto !important; padding: 0 8px; }
+  #listPanel { display: none; padding: 10px 12px; background: #f7f7f8; border-bottom: 1px solid #eee; }
+  #listPanel.show { display: block; }
+  .lhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+    font-size: 12px; color: #444; }
+  #invList { max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+  #invList:empty::after { content: "Nothing saved yet — hit 📌 under a reply."; font-size: 11px; color: #999; }
+  .invrow { background: #fff; border: 1px solid #eaeaea; border-radius: 9px; padding: 6px 8px;
+    position: relative; }
+  .invmain { font-size: 12.5px; color: #1a1a1a; padding-right: 16px; }
+  .invsub { font-size: 10.5px; color: #888; margin-top: 1px; }
+  .invx { position: absolute; top: 5px; right: 7px; cursor: pointer; color: #b55; font-size: 12px; }
+  .savebtn { margin-top: 5px; font-size: 11px; border: 1px solid #dcdce6; background: #f4f4fb;
+    color: #445; border-radius: 8px; padding: 3px 8px; cursor: pointer; }
+  .savebtn:hover { background: #ececf6; }
+  .savebtn:disabled { opacity: .6; cursor: default; }
+
   /* log */
   #log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px;
     -webkit-user-select: text; user-select: text; }
@@ -74,6 +92,7 @@
   <header>
     <span class="title">Mr. Panda 🐼</span>
     <select id="modelSel" title="Model"><option>loading…</option></select>
+    <button id="listBtn" title="Saved investors">📋 <span id="listCount">0</span></button>
     <button id="gear" title="Settings">⚙</button>
     <button id="close" title="Close">✕</button>
   </header>
@@ -88,6 +107,17 @@
     <label id="webToggleRow"><input type="checkbox" id="webToggle" /> 🌐 Search the live web (Google)</label>
     <div class="shint">Free key at aistudio.google.com/apikey — saved only on this Mac, only sent to Google.</div>
     <button id="saveKey">Save</button><span id="skeyStatus"></span>
+  </div>
+
+  <div id="listPanel">
+    <div class="lhead">
+      <span id="lcount">0 saved</span>
+      <span>
+        <span class="minibtn" id="exportCsv">⬇ Export CSV</span>
+        <span class="minibtn" id="clearInv">clear all</span>
+      </span>
+    </div>
+    <div id="invList"></div>
   </div>
 
   <div id="log"></div>
@@ -111,6 +141,8 @@
   const listModelsBtn = $('listModels'), modelStatus = $('modelStatus'), webToggle = $('webToggle');
   const saveKey = $('saveKey'), skeyStatus = $('skeyStatus'), clip = $('clip'), fileInput = $('fileInput');
   const attachBar = $('attach'), drop = $('drop');
+  const listBtn = $('listBtn'), listCount = $('listCount'), listPanel = $('listPanel');
+  const invList = $('invList'), lcount = $('lcount'), exportCsv = $('exportCsv'), clearInv = $('clearInv');
 
   let hasKey = false, greeted = false, awaiting = false;
   let attachments = [];   // {name, mime, dataBase64}
@@ -217,7 +249,7 @@
     const t = addThinking();
     const r = await api.ask(text, sending);
     t.remove();
-    if(r && r.ok) addMsg('panda', r.text);
+    if(r && r.ok){ const el = addMsg('panda', r.text); attachSave(el, r.text); }
     else if(r && r.code==='NO_KEY'){ addMsg('err','I need a Gemini key — open ⚙ and paste one.'); settings.classList.add('show'); }
     else addMsg('err', "That didn't work: " + ((r && r.error) || 'unknown error'));
     awaiting=false; send.disabled=false; inp.focus();
@@ -225,7 +257,85 @@
   send.addEventListener('click', reply);
   inp.addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); reply(); } });
 
+  // ---- saved investors ----
+  function esc2(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  async function refreshCount(){
+    if(!api.listInvestors) return;
+    const items = await api.listInvestors();
+    listCount.textContent = items.length;
+    lcount.textContent = items.length + ' saved';
+    if(listPanel.classList.contains('show')) renderInvestors(items);
+  }
+  function renderInvestors(items){
+    invList.innerHTML = '';
+    items.forEach(it => {
+      const row = document.createElement('div'); row.className = 'invrow';
+      const sub = [it.stage, it.focus, it.location, it.contact, it.source].filter(Boolean).join(' · ');
+      row.innerHTML = '<div class="invmain"><b>' + esc2(it.name || it.firm) + '</b>' +
+        (it.name && it.firm ? ' · ' + esc2(it.firm) : '') + '</div>' +
+        (sub ? '<div class="invsub">' + esc2(sub) + '</div>' : '') +
+        '<span class="invx" title="remove">✕</span>';
+      row.querySelector('.invx').addEventListener('click', async () => { await api.removeInvestor(it.id); refreshCount(); });
+      invList.appendChild(row);
+    });
+  }
+  listBtn.addEventListener('click', async () => {
+    const show = !listPanel.classList.contains('show');
+    listPanel.classList.toggle('show', show);
+    if(show){ settings.classList.remove('show'); if(api.listInvestors) renderInvestors(await api.listInvestors()); }
+  });
+  exportCsv.addEventListener('click', async () => {
+    if(!api.exportCsv) return;
+    const r = await api.exportCsv();
+    if(r && r.ok) lcount.textContent = 'exported ' + r.count + ' → CSV ✓';
+    else if(!(r && r.canceled)) lcount.textContent = (r && r.error) || 'export failed';
+  });
+  clearInv.addEventListener('click', async () => {
+    if(!api.clearInvestors) return;
+    await api.clearInvestors(); renderInvestors([]); refreshCount();
+  });
+  function attachSave(el, text){
+    el.appendChild(document.createElement('br'));
+    if(api.copyText){
+      const cp = document.createElement('button'); cp.className = 'savebtn'; cp.textContent = '📋 Copy';
+      cp.addEventListener('click', () => { api.copyText(text); cp.textContent = '✓ copied';
+        setTimeout(() => { cp.textContent = '📋 Copy'; }, 1500); });
+      el.appendChild(cp);
+    }
+    if(api.pasteIntoBox){
+      const pb = document.createElement('button'); pb.className = 'savebtn'; pb.style.marginLeft = '6px';
+      pb.textContent = '⌨️ Paste into box';
+      pb.addEventListener('click', async () => {
+        pb.disabled = true;
+        for(let n = 3; n >= 1; n--){ pb.textContent = 'click the box… ' + n; await new Promise(r => setTimeout(r, 1000)); }
+        pb.textContent = 'pasting…';
+        const r = await api.pasteIntoBox(text);
+        if(r && r.ok){ pb.textContent = '✓ pasted'; }
+        else if(r && r.code === 'NO_PERMISSION'){
+          pb.textContent = '⚠ needs permission';
+          addMsg('err', 'To paste on screen I need Accessibility access. I just opened the right settings page — turn on this app (it may show as “Electron”), then click Paste again.');
+          if(api.openAccessibility) api.openAccessibility();
+        } else { pb.textContent = 'paste failed'; }
+        setTimeout(() => { pb.textContent = '⌨️ Paste into box'; pb.disabled = false; }, 2500);
+      });
+      el.appendChild(pb);
+    }
+    if(api.saveFromReply){
+      const b = document.createElement('button'); b.className = 'savebtn'; b.style.marginLeft = '6px';
+      b.textContent = '📌 Save to list';
+      b.addEventListener('click', async () => {
+        b.disabled = true; b.textContent = 'saving…';
+        const r = await api.saveFromReply(text);
+        if(r && r.ok){ b.textContent = r.added ? '✓ added ' + r.added : (r.found ? '✓ already saved' : 'nothing to save'); refreshCount(); }
+        else if(r && r.code === 'NO_KEY'){ b.textContent = 'set your key first'; b.disabled = false; }
+        else { b.textContent = 'couldn’t save'; }
+      });
+      el.appendChild(b);
+    }
+  }
+
   refreshConfig();
+  refreshCount();
   // Pull the full model list once on open (if a key is already saved).
   (async () => { if(api.listModels){ const r = await api.listModels(); if(r && r.ok && r.models.length) setModelOptions(r.models, modelSel.value); } })();
 </script>
