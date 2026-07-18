@@ -306,14 +306,12 @@
       const pb = document.createElement('button'); pb.className = 'savebtn'; pb.style.marginLeft = '6px';
       pb.textContent = '⌨️ Paste into box';
       pb.addEventListener('click', async () => {
-        pb.disabled = true;
-        for(let n = 3; n >= 1; n--){ pb.textContent = 'click the box… ' + n; await new Promise(r => setTimeout(r, 1000)); }
-        pb.textContent = 'pasting…';
+        pb.disabled = true; pb.textContent = 'pasting…';
         const r = await api.pasteIntoBox(text);
         if(r && r.ok){ pb.textContent = '✓ pasted'; }
         else if(r && r.code === 'NO_PERMISSION'){
           pb.textContent = '⚠ needs permission';
-          addMsg('err', 'To paste on screen I need Accessibility access. I just opened the right settings page — turn on this app (it may show as “Electron”), then click Paste again.');
+          addMsg('err', 'To paste on screen I need Accessibility access. I just opened the right settings page — turn on “Mr Panda”, then click Paste again.');
           if(api.openAccessibility) api.openAccessibility();
         } else { pb.textContent = 'paste failed'; }
         setTimeout(() => { pb.textContent = '⌨️ Paste into box'; pb.disabled = false; }, 2500);
