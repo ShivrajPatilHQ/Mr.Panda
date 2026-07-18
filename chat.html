@@ -2,400 +2,434 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Mr. Panda — Chat</title>
+<title>Mr. Panda</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; font-family: -apple-system, "Segoe UI", sans-serif;
-    background: #ffffff; color: #1a1a1a; overflow: hidden; }
-  #wrap { display: flex; flex-direction: column; height: 100%; }
+  :root { --bg:#fff; --ink:#1b1b20; --sec:#5f6068; --muted:#9a9aa2; --line:#ececef;
+    --soft:#f6f6f8; --soft2:#f0f0f4; --accent:#2d6cdf; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; font-family:-apple-system,"Segoe UI",sans-serif; background:var(--bg);
+    color:var(--ink); overflow:hidden; }
+  #wrap { display:flex; flex-direction:column; height:100%; }
 
-  /* header */
-  header { display: flex; align-items: center; gap: 8px; padding: 8px 10px;
-    background: #1c1c1c; color: #fff; -webkit-user-select: none; }
-  header .title { font-weight: 600; font-size: 13px; white-space: nowrap; }
-  header select { font-size: 11px; padding: 3px 6px; border-radius: 7px; border: 1px solid #444;
-    background: #2a2a2a; color: #eee; max-width: 150px; margin-left: auto; }
-  header button { border: none; background: #333; color: #fff; width: 26px; height: 26px;
-    border-radius: 7px; cursor: pointer; font-size: 13px; }
-  header button:hover { background: #444; }
+  header { display:flex; align-items:center; gap:11px; padding:11px 13px; border-bottom:1px solid var(--line);
+    -webkit-user-select:none; }
+  #av { width:34px; height:34px; border-radius:10px; background:var(--soft); flex:none;
+    display:flex; align-items:center; justify-content:center; image-rendering:pixelated; }
+  #av canvas { image-rendering:pixelated; }
+  .nm { font-size:14px; font-weight:600; line-height:1.15; }
+  .st { font-size:11px; color:var(--muted); }
+  .hbtns { margin-left:auto; display:flex; gap:3px; }
+  .ic { width:30px; height:30px; border-radius:8px; border:none; background:transparent; color:var(--sec);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .ic:hover { background:var(--soft); }
+  .ic svg { width:18px; height:18px; }
 
-  /* settings */
-  #settings { display: none; padding: 10px 12px; background: #f7f7f8; border-bottom: 1px solid #eee; }
-  #settings.show { display: block; }
-  #settings label { font-size: 11px; color: #555; display: block; margin: 0 0 3px; }
-  #settings input[type=password], #settings input[type=text] { width: 100%; font-size: 12px;
-    padding: 6px 8px; border: 1px solid #d8d8d8; border-radius: 8px; outline: none; margin-bottom: 8px; }
-  .rowline { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-  .minibtn { font-size: 11px; color: #333; cursor: pointer; border: 1px solid #ddd;
-    border-radius: 8px; padding: 4px 8px; background: #fff; }
-  .minibtn:hover, .minibtn:hover { background: #eee; }
-  .shint { font-size: 10px; color: #888; line-height: 1.4; margin-bottom: 8px; }
-  #saveKey { border: none; background: #1c1c1c; color: #fff; border-radius: 8px;
-    padding: 6px 12px; font-size: 12px; cursor: pointer; }
-  #skeyStatus { font-size: 11px; margin-left: 8px; }
-  #webToggleRow { font-size: 12px; color: #333; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .tabs { display:flex; gap:4px; padding:8px 10px 0; }
+  .tab { flex:1; text-align:center; font-size:13px; font-weight:500; color:var(--sec);
+    padding:8px 0 10px; border:none; background:transparent; cursor:pointer; border-bottom:2px solid transparent; }
+  .tab.on { color:var(--ink); border-bottom-color:var(--ink); }
 
-  /* saved-investor list */
-  #listBtn { width: auto !important; padding: 0 8px; }
-  #listPanel { display: none; padding: 10px 12px; background: #f7f7f8; border-bottom: 1px solid #eee; }
-  #listPanel.show { display: block; }
-  .lhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
-    font-size: 12px; color: #444; }
-  #invList { max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
-  #invList:empty::after { content: "Nothing saved yet — hit 📌 under a reply."; font-size: 11px; color: #999; }
-  .invrow { background: #fff; border: 1px solid #eaeaea; border-radius: 9px; padding: 6px 8px;
-    position: relative; }
-  .invmain { font-size: 12.5px; color: #1a1a1a; padding-right: 16px; }
-  .invsub { font-size: 10.5px; color: #888; margin-top: 1px; }
-  .invx { position: absolute; top: 5px; right: 7px; cursor: pointer; color: #b55; font-size: 12px; }
-  .savebtn { margin-top: 5px; font-size: 11px; border: 1px solid #dcdce6; background: #f4f4fb;
-    color: #445; border-radius: 8px; padding: 3px 8px; cursor: pointer; }
-  .savebtn:hover { background: #ececf6; }
-  .savebtn:disabled { opacity: .6; cursor: default; }
+  #content { position:relative; flex:1; overflow:hidden; display:flex; flex-direction:column; }
+  #main { flex:1; display:flex; flex-direction:column; min-height:0; }
 
-  /* humanize */
-  #humanBtn { width: auto !important; padding: 0 8px; }
-  #humanPanel { display: none; padding: 10px 12px; background: #f7f7f8; border-bottom: 1px solid #eee; }
-  #humanPanel.show { display: block; }
-  .hhint { font-size: 11px; color: #777; line-height: 1.4; margin-bottom: 8px; }
-  .hmodes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-  .hmode { font-size: 12px; padding: 5px 10px; border: 1px solid #d8d8d8; border-radius: 9px;
-    background: #fff; cursor: pointer; color: #333; }
-  .hmode:hover { background: #eef; border-color: #1c1c1c; }
-  .hrow { font-size: 12px; color: #333; display: flex; align-items: center; gap: 6px; cursor: pointer; margin-bottom: 6px; }
-  #humanCustom { width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid #d8d8d8; border-radius: 8px; outline: none; margin-bottom: 8px; }
-  #humanStatus { font-size: 11px; color: #666; min-height: 14px; }
+  .tools { display:flex; align-items:center; gap:8px; padding:8px 13px; border-bottom:1px solid var(--line); }
+  .pill { font-size:12px; color:var(--ink); background:var(--soft); border:none; border-radius:8px;
+    padding:5px 10px; cursor:pointer; }
+  .pill:hover { background:var(--soft2); }
+  .tools .muted { font-size:11px; color:var(--muted); margin-left:auto; }
 
-  /* log */
-  #log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px;
-    -webkit-user-select: text; user-select: text; }
-  .m { font-size: 13px; line-height: 1.55; padding: 8px 11px; border-radius: 13px;
-    max-width: 88%; white-space: pre-wrap; word-wrap: break-word; }
-  .m.user { align-self: flex-end; background: #1c1c1c; color: #fff; border-bottom-right-radius: 4px; }
-  .m.panda { align-self: flex-start; background: #f0f0f2; color: #1a1a1a; border-bottom-left-radius: 4px; }
-  .m.err { align-self: flex-start; background: #fdecec; color: #a12; }
+  #log { flex:1; overflow-y:auto; padding:14px 13px; display:flex; flex-direction:column; gap:12px;
+    -webkit-user-select:text; user-select:text; }
+  .row { display:flex; }
+  .row.me { justify-content:flex-end; }
+  .col { max-width:84%; display:flex; flex-direction:column; align-items:flex-start; }
+  .row.me .col { align-items:flex-end; }
+  .b { max-width:100%; font-size:13.5px; line-height:1.5; padding:9px 12px; border-radius:14px;
+    white-space:pre-wrap; word-wrap:break-word; }
+  .b.me { background:var(--ink); color:#fff; border-bottom-right-radius:5px; }
+  .b.pa { background:var(--soft); color:var(--ink); border-bottom-left-radius:5px; }
+  .b.err { background:#fdecec; color:#a12; }
+  .acts { display:flex; gap:5px; margin:5px 0 0 2px; }
+  .act { font-size:11px; color:var(--sec); border:1px solid var(--line); background:#fff; border-radius:7px;
+    padding:3px 8px; cursor:pointer; }
+  .act:hover { background:var(--soft); }
   .dots span { display:inline-block; width:5px; height:5px; margin:0 1px; border-radius:50%;
-    background:#999; animation: blink 1.2s infinite; }
-  .dots span:nth-child(2){ animation-delay:.2s; } .dots span:nth-child(3){ animation-delay:.4s; }
+    background:var(--muted); animation:blink 1.2s infinite; }
+  .dots span:nth-child(2){animation-delay:.2s;} .dots span:nth-child(3){animation-delay:.4s;}
   @keyframes blink { 0%,80%,100%{opacity:.3} 40%{opacity:1} }
 
-  /* attachments + input */
-  #attach { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 10px; }
-  #attach:empty { display: none; }
-  .chipf { font-size: 11px; background: #eef; border: 1px solid #dde; border-radius: 8px;
-    padding: 3px 6px; display: flex; align-items: center; gap: 5px; color: #334; }
-  .chipf b { cursor: pointer; color: #a44; }
-  #inbar { display: flex; align-items: flex-end; gap: 6px; padding: 8px 10px; border-top: 1px solid #eee; }
-  #clip { border: 1px solid #d8d8d8; background: #fff; border-radius: 9px; width: 34px; height: 34px;
-    cursor: pointer; font-size: 15px; flex: none; }
-  #clip:hover { background: #f2f2f2; }
-  #inp { flex: 1; font-size: 13px; padding: 8px 10px; border: 1px solid #d8d8d8; border-radius: 10px;
-    outline: none; resize: none; max-height: 96px; min-height: 34px; font-family: inherit; }
-  #inp:focus { border-color: #1c1c1c; }
-  #send { border: none; background: #1c1c1c; color: #fff; border-radius: 10px; padding: 0 14px;
-    height: 34px; font-size: 13px; cursor: pointer; flex: none; }
-  #send:hover { background: #333; } #send:disabled { opacity: .5; cursor: default; }
-  #drop { position: absolute; inset: 0; background: rgba(28,28,28,.75); color: #fff;
-    display: none; align-items: center; justify-content: center; font-size: 15px; z-index: 5; }
-  #drop.show { display: flex; }
+  #attach { display:flex; flex-wrap:wrap; gap:5px; padding:0 13px; }
+  #attach:empty { display:none; }
+  .chipf { font-size:11px; background:var(--soft); border:1px solid var(--line); border-radius:8px;
+    padding:3px 7px; display:flex; align-items:center; gap:5px; }
+  .chipf b { cursor:pointer; color:#a44; }
+
+  .composer { display:flex; align-items:flex-end; gap:8px; padding:10px 12px; border-top:1px solid var(--line); }
+  #inp { flex:1; font-size:13.5px; padding:9px 11px; border:1px solid var(--line); border-radius:12px;
+    outline:none; resize:none; max-height:110px; min-height:38px; font-family:inherit; background:var(--soft); }
+  #inp:focus { border-color:var(--ink); background:#fff; }
+  .rnd { width:38px; height:38px; border-radius:11px; flex:none; display:flex; align-items:center;
+    justify-content:center; cursor:pointer; border:1px solid var(--line); background:#fff; color:var(--sec); }
+  .rnd:hover { background:var(--soft); }
+  #send { background:var(--ink); color:#fff; border-color:var(--ink); }
+  #send:hover { background:#000; } #send:disabled { opacity:.45; }
+  .rnd svg { width:19px; height:19px; }
+
+  .sheet { position:absolute; inset:0; background:var(--bg); display:none; flex-direction:column; z-index:5; }
+  .sheet.on { display:flex; }
+  .shead { display:flex; align-items:center; gap:6px; padding:11px 12px; border-bottom:1px solid var(--line); }
+  .shead .t { font-size:14px; font-weight:600; }
+  .sbody { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:9px; }
+  label.f { font-size:11px; color:var(--sec); }
+  .in { width:100%; font-size:13px; padding:8px 10px; border:1px solid var(--line); border-radius:9px;
+    outline:none; background:var(--soft); }
+  .in:focus { border-color:var(--ink); background:#fff; }
+  select.in { height:36px; }
+  .primary { background:var(--ink); color:#fff; border:none; border-radius:9px; padding:8px 14px;
+    font-size:13px; cursor:pointer; align-self:flex-start; }
+  .hint { font-size:11px; color:var(--muted); line-height:1.45; }
+  .status { font-size:11px; color:var(--sec); min-height:14px; }
+  .voice { display:flex; align-items:center; gap:11px; padding:9px 11px; border:1px solid var(--line);
+    border-radius:11px; cursor:pointer; }
+  .voice:hover { border-color:var(--ink); background:var(--soft); }
+  .vt { font-size:13px; font-weight:500; } .vd { font-size:11px; color:var(--sec); }
+  .toggle { display:flex; align-items:center; justify-content:space-between; font-size:12.5px; padding:4px 2px; }
+  .switch { width:36px; height:21px; border-radius:20px; background:var(--line); position:relative; cursor:pointer; }
+  .switch.on { background:var(--ink); }
+  .knob { width:17px; height:17px; border-radius:50%; background:#fff; position:absolute; top:2px; left:2px;
+    transition:left .15s; }
+  .switch.on .knob { left:17px; }
+  .invrow { border:1px solid var(--line); border-radius:9px; padding:7px 9px; position:relative; }
+  .invmain { font-size:12.5px; padding-right:16px; } .invsub { font-size:11px; color:var(--sec); margin-top:1px; }
+  .invx { position:absolute; top:6px; right:8px; cursor:pointer; color:#b55; }
+  .empty { font-size:12px; color:var(--muted); text-align:center; padding:20px 0; }
+  .modelrow { display:flex; gap:6px; align-items:center; }
 </style>
 </head>
 <body>
 <div id="wrap">
   <header>
-    <span class="title">Mr. Panda 🐼</span>
-    <select id="modelSel" title="Model"><option>loading…</option></select>
-    <button id="humanBtn" title="Humanize selected text">✨</button>
-    <button id="listBtn" title="Saved investors">📋 <span id="listCount">0</span></button>
-    <button id="gear" title="Settings">⚙</button>
-    <button id="close" title="Close">✕</button>
+    <div id="av"><canvas width="52" height="52"></canvas></div>
+    <div>
+      <div class="nm">Mr. Panda</div>
+      <div class="st" id="statusLine">setting up…</div>
+    </div>
+    <div class="hbtns">
+      <button class="ic" id="gear" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
+      <button class="ic" id="close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
   </header>
 
-  <div id="settings">
-    <label>Gemini API key</label>
-    <input id="keyInput" type="password" placeholder="paste your key here" autocomplete="off" />
-    <div class="rowline">
-      <span class="minibtn" id="listModels">↻ refresh models</span>
-      <span id="modelStatus" style="font-size:10px;color:#888;"></span>
-    </div>
-    <label id="webToggleRow"><input type="checkbox" id="webToggle" /> 🌐 Search the live web (Google)</label>
-    <div class="shint">Free key at aistudio.google.com/apikey — saved only on this Mac, only sent to Google.</div>
-    <button id="saveKey">Save</button><span id="skeyStatus"></span>
+  <div class="tabs">
+    <button class="tab on" data-tab="research">Research</button>
+    <button class="tab" data-tab="write">Write</button>
   </div>
 
-  <div id="listPanel">
-    <div class="lhead">
-      <span id="lcount">0 saved</span>
-      <span>
-        <span class="minibtn" id="exportCsv">⬇ Export CSV</span>
-        <span class="minibtn" id="clearInv">clear all</span>
-      </span>
+  <div id="content">
+    <div id="main">
+      <div class="tools" id="tools"></div>
+      <div id="log"></div>
+      <div id="attach"></div>
+      <div class="composer">
+        <button class="rnd" id="clip" aria-label="Attach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l9-9a3.3 3.3 0 0 1 4.7 4.7l-9 9a1.7 1.7 0 0 1-2.4-2.4l8-8"/></svg></button>
+        <textarea id="inp" rows="1"></textarea>
+        <button class="rnd" id="send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+      </div>
     </div>
-    <div id="invList"></div>
-  </div>
 
-  <div id="humanPanel">
-    <div class="hhint">Select text in any app (Gmail, LinkedIn…), then pick a voice — I'll rewrite it and paste it back over your selection.</div>
-    <div class="hmodes">
-      <span class="hmode" data-mode="subtle">Subtle</span>
-      <span class="hmode" data-mode="human">Human</span>
-      <span class="hmode" data-mode="ceo">CEO</span>
-      <span class="hmode" data-mode="founder">Founder</span>
-      <span class="hmode" data-mode="custom">Custom…</span>
+    <div class="sheet" id="settingsSheet">
+      <div class="shead"><button class="ic sback" aria-label="Back">&#8592;</button><span class="t">Settings</span></div>
+      <div class="sbody">
+        <label class="f">Gemini API key</label>
+        <input id="keyInput" class="in" type="password" placeholder="paste your key" autocomplete="off" />
+        <label class="f">Model</label>
+        <div class="modelrow">
+          <select id="modelSel" class="in"><option>loading…</option></select>
+          <button class="pill" id="listModels">refresh</button>
+        </div>
+        <div class="toggle"><span>Search the live web</span><div class="switch" id="webSwitch"><div class="knob"></div></div></div>
+        <div class="hint">Free key at aistudio.google.com/apikey. Saved only on this Mac, sent only to Google.</div>
+        <button class="primary" id="saveKey">Save</button>
+        <div class="status" id="skeyStatus"></div>
+      </div>
     </div>
-    <input id="humanCustom" placeholder="describe the voice, then press Enter…" style="display:none" />
-    <label class="hrow"><input type="checkbox" id="imperfect" /> add human imperfections</label>
-    <div id="humanStatus"></div>
-  </div>
 
-  <div id="log"></div>
-  <div id="attach"></div>
+    <div class="sheet" id="savedSheet">
+      <div class="shead"><button class="ic sback" aria-label="Back">&#8592;</button><span class="t">Saved</span>
+        <span class="muted" style="margin-left:auto;font-size:11px;color:var(--muted)" id="savedCount">0</span></div>
+      <div class="sbody" id="invList"></div>
+      <div class="composer" style="justify-content:space-between">
+        <button class="pill" id="exportCsv">Export CSV</button>
+        <button class="pill" id="clearInv">Clear all</button>
+      </div>
+    </div>
 
-  <div id="inbar">
-    <button id="clip" title="Attach files or images">📎</button>
-    <textarea id="inp" rows="1" placeholder="Ask Mr. Panda…  (Enter to send)"></textarea>
-    <button id="send">Send</button>
+    <div class="sheet" id="voicesSheet">
+      <div class="shead"><button class="ic sback" aria-label="Back">&#8592;</button><span class="t">Humanize</span></div>
+      <div class="sbody">
+        <div class="hint">Select text in any app, then pick a voice — I'll rewrite it and paste it back.</div>
+        <div class="voice" data-mode="subtle"><div><div class="vt">Subtle</div><div class="vd">trim filler, kill em-dashes</div></div></div>
+        <div class="voice" data-mode="human"><div><div class="vt">Human</div><div class="vd">warm, conversational</div></div></div>
+        <div class="voice" data-mode="ceo"><div><div class="vt">CEO</div><div class="vd">short, lowercase, blunt</div></div></div>
+        <div class="voice" data-mode="founder"><div><div class="vt">Founder</div><div class="vd">punchy and direct</div></div></div>
+        <div class="voice" data-mode="custom"><div><div class="vt">Custom…</div><div class="vd">describe the voice</div></div></div>
+        <input id="humanCustom" class="in" placeholder="describe the voice, then Enter…" style="display:none" />
+        <div class="toggle"><span>Add human imperfections</span><div class="switch" id="impSwitch"><div class="knob"></div></div></div>
+        <div class="status" id="humanStatus"></div>
+      </div>
+    </div>
   </div>
 </div>
-<div id="drop">Drop files to attach 📎</div>
-<input id="fileInput" type="file" multiple style="display:none"
-       accept="image/*,.pdf,.txt,.md,.csv,.json,.doc,.docx" />
+<input id="fileInput" type="file" multiple style="display:none" accept="image/*,.pdf,.txt,.md,.csv,.json,.doc,.docx" />
 
 <script>
   const api = window.panda || {};
   const $ = id => document.getElementById(id);
-  const log = $('log'), inp = $('inp'), send = $('send'), gear = $('gear'), closeBtn = $('close');
-  const settings = $('settings'), keyInput = $('keyInput'), modelSel = $('modelSel');
-  const listModelsBtn = $('listModels'), modelStatus = $('modelStatus'), webToggle = $('webToggle');
-  const saveKey = $('saveKey'), skeyStatus = $('skeyStatus'), clip = $('clip'), fileInput = $('fileInput');
-  const attachBar = $('attach'), drop = $('drop');
-  const listBtn = $('listBtn'), listCount = $('listCount'), listPanel = $('listPanel');
-  const invList = $('invList'), lcount = $('lcount'), exportCsv = $('exportCsv'), clearInv = $('clearInv');
+  const log = $('log'), inp = $('inp'), tools = $('tools'), statusLine = $('statusLine');
+  const attachBar = $('attach'), fileInput = $('fileInput');
 
-  let hasKey = false, greeted = false, awaiting = false;
-  let attachments = [];   // {name, mime, dataBase64}
+  // ---- pixel panda avatar ----
+  const PSPRITE = [
+    "..KKKK............KKKK..",".KKKKKK..........KKKKKK.",".KKKKWWWWWWWWWWWWWWKKKK.",
+    "..KKWWWWWWWWWWWWWWWWKK..","..WWWWWWWWWWWWWWWWWWWW..","..WWSSSSSSSSSSSSSSSSWW..",
+    "..WWSXSSSSSSSSSSSSXSWW..","..WWWSSSSSSSSSSSSSSWWW..","..WWWWWWWWWWWWWWWWWWWW..",
+    "..WWWWWWWWWNNWWWWWWWWW..","..WWWWWWWWWWWWWWWWWWWW..","...WWWWWWWWWWWWWWWWWW...",
+    "....TTTTTHHHHHHTTTTT....","...TTTTTTTHRRHTTTTTTT...","...TTTTTTTHRRHTTTTTTT...",
+    "..TTTTTTTTTRRTTTTTTTTT..","..TTTTTTTTTDRTTTTTTTTT..","..KKKTTTTTTTTTTTTTTKKK..",
+    "..KKKTTTTTTTTTTTTTTKKK..","....TTTTTTTTTTTTTTTT....",".....TTTTTT..TTTTTT.....",
+    ".....TTTTTT..TTTTTT.....","....KKKKKK....KKKKKK....","....KKKKKK....KKKKKK...."
+  ];
+  const PPAL = { K:'#17171C', W:'#F2EFE4', S:'#0D1015', X:'#9FD8FF', N:'#17171C',
+    T:'#26262E', H:'#F6F4EC', R:'#C0392B', D:'#E8C766' };
+  (function drawPanda(){
+    const cv = document.querySelector('#av canvas'); const ctx = cv.getContext('2d');
+    const S = Math.floor(cv.width / 24), ox = Math.floor((cv.width - 24*S)/2), oy = Math.floor((cv.height - 24*S)/2);
+    for(let r=0;r<PSPRITE.length;r++) for(let c=0;c<PSPRITE[r].length;c++){
+      const ch = PSPRITE[r][c]; if(ch==='.') continue; const col = PPAL[ch]; if(!col) continue;
+      ctx.fillStyle = col; ctx.fillRect(ox+c*S, oy+r*S, S, S);
+    }
+  })();
 
-  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function addMsg(role, text){ const d=document.createElement('div'); d.className='m '+role;
-    d.innerHTML=esc(text); log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
-  function addThinking(){ const d=document.createElement('div'); d.className='m panda dots';
-    d.innerHTML='<span></span><span></span><span></span>'; log.appendChild(d);
-    log.scrollTop=log.scrollHeight; return d; }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+  // ---- tabs + message store ----
+  let tab = 'research';
+  const msgs = { research: [], write: [] };
+  let greeted = { research:false, write:false }, awaiting = false;
+
+  const PLACEHOLDER = {
+    research: 'Find investors, research a company or market…',
+    write: 'Write an email, or paste text to rewrite…'
+  };
+
+  function renderTools(){
+    if(tab === 'research'){
+      tools.innerHTML = '<button class="pill" id="savedBtn">Saved (<span id="listCount">0</span>)</button>' +
+        '<span class="muted">investors &amp; contacts you save land here</span>';
+      $('savedBtn').addEventListener('click', () => openSheet('savedSheet'));
+    } else {
+      tools.innerHTML = '<button class="pill" id="voicesBtn">✦ Humanize a selection</button>' +
+        '<span class="muted">writing &amp; rewriting</span>';
+      $('voicesBtn').addEventListener('click', () => openSheet('voicesSheet'));
+    }
+    refreshCount();
+  }
+
+  function addMsgEl(role, text){
+    const row = document.createElement('div'); row.className = 'row' + (role==='user'?' me':'');
+    const col = document.createElement('div'); col.className = 'col';
+    const b = document.createElement('div'); b.className = 'b ' + (role==='user'?'me':(role==='err'?'err':'pa'));
+    b.innerHTML = esc(text); col.appendChild(b);
+    if(role === 'panda') attachActions(col, text);
+    row.appendChild(col);
+    log.appendChild(row); log.scrollTop = log.scrollHeight;
+    return row;
+  }
+  function addThinking(){
+    const row = document.createElement('div'); row.className = 'row';
+    const b = document.createElement('div'); b.className = 'b pa dots';
+    b.innerHTML = '<span></span><span></span><span></span>'; row.appendChild(b);
+    log.appendChild(row); log.scrollTop = log.scrollHeight; return row;
+  }
+  function pushMsg(role, text){ msgs[tab].push({ role, text }); return addMsgEl(role, text); }
+
+  function attachActions(wrap, text){
+    const bar = document.createElement('div'); bar.className = 'acts';
+    const mk = (label, fn) => { const el = document.createElement('button'); el.className='act'; el.textContent=label;
+      el.addEventListener('click', () => fn(el)); bar.appendChild(el); return el; };
+    if(api.copyText) mk('Copy', (el)=>{ api.copyText(text); el.textContent='Copied'; setTimeout(()=>el.textContent='Copy',1200); });
+    if(tab === 'write' && api.pasteIntoBox) mk('Paste into box', async (el)=>{
+      el.textContent='pasting…'; const r = await api.pasteIntoBox(text);
+      el.textContent = r&&r.ok ? 'Pasted' : (r&&r.code==='NO_PERMISSION' ? 'needs access' : 'failed');
+      if(r&&r.code==='NO_PERMISSION' && api.openAccessibility) api.openAccessibility();
+      setTimeout(()=>el.textContent='Paste into box',1800);
+    });
+    if(tab === 'research' && api.saveFromReply) mk('Save', async (el)=>{
+      el.textContent='saving…'; const r = await api.saveFromReply(text);
+      el.textContent = r&&r.ok ? (r.added?('Added '+r.added):'saved') : (r&&r.code==='NO_KEY'?'set key':'failed');
+      refreshCount(); setTimeout(()=>el.textContent='Save',1500);
+    });
+    wrap.appendChild(bar);
+  }
+
+  function renderLog(){
+    log.innerHTML = '';
+    msgs[tab].forEach(m => addMsgEl(m.role, m.text));
+  }
+  function greetOnce(){
+    if(greeted[tab]) return; greeted[tab] = true;
+    const g = tab === 'research'
+      ? "Research desk. Ask me to find investors, dig into a company, or size a market. Save the good ones and export to CSV."
+      : "Writing desk. Ask me to draft an email or message, or hit Humanize to rewrite text you've selected anywhere.";
+    pushMsg('panda', g);
+  }
+  function switchTab(t){
+    if(t === tab) return; tab = t;
+    closeSheets();
+    document.querySelectorAll('.tab').forEach(el => el.classList.toggle('on', el.dataset.tab===t));
+    inp.placeholder = PLACEHOLDER[t];
+    renderTools(); renderLog(); greetOnce();
+    log.scrollTop = log.scrollHeight;
+  }
+  document.querySelectorAll('.tab').forEach(el => el.addEventListener('click', () => switchTab(el.dataset.tab)));
+
+  // ---- sheets ----
+  function openSheet(id){ document.querySelectorAll('.sheet').forEach(s => s.classList.toggle('on', s.id===id)); }
+  function closeSheets(){ document.querySelectorAll('.sheet').forEach(s => s.classList.remove('on')); }
+  document.querySelectorAll('.sback').forEach(b => b.addEventListener('click', closeSheets));
+  $('gear').addEventListener('click', () => openSheet('settingsSheet'));
+  $('close').addEventListener('click', () => api.closeChat && api.closeChat());
+
+  // ---- config / settings ----
+  const keyInput = $('keyInput'), modelSel = $('modelSel'), skeyStatus = $('skeyStatus'),
+        webSwitch = $('webSwitch');
+  let hasKey = false, webOn = true;
+  function setModelOptions(list, current){
+    const set = new Set(list); if(current) set.add(current);
+    modelSel.innerHTML = '';
+    [...set].forEach(m => { const o=document.createElement('option'); o.value=m; o.textContent=m; if(m===current)o.selected=true; modelSel.appendChild(o); });
+    if(!modelSel.options.length){ const o=document.createElement('option'); o.textContent='(set key)'; modelSel.appendChild(o); }
+  }
   async function refreshConfig(){
     if(!api.getConfig) return;
     const c = await api.getConfig();
-    hasKey = !!c.hasKey;
-    webToggle.checked = c.webSearch !== false;
-    setModelOptions(c.geminiModel ? [c.geminiModel] : [], c.geminiModel);
-    skeyStatus.textContent = hasKey ? '✓ key saved' : '';
-    skeyStatus.style.color = hasKey ? '#2a7' : '#a12';
-    if(!greeted){ greeted = true; addMsg('panda', hasKey
-      ? "At your service. Ask me anything, attach a file or image, or resize this window as you like. 💼"
-      : "At your service! Open ⚙ and paste your Gemini key first, then ask away. 🐼"); }
+    hasKey = !!c.hasKey; webOn = c.webSearch !== false;
+    webSwitch.classList.toggle('on', webOn);
+    setModelOptions(c.geminiModel?[c.geminiModel]:[], c.geminiModel);
+    statusLine.textContent = (hasKey ? 'online' : 'add your key') + (c.geminiModel ? ' · ' + c.geminiModel.replace('gemini-','') : '');
+    skeyStatus.textContent = hasKey ? '✓ key saved' : ''; skeyStatus.style.color = '#2a7';
   }
-
-  function setModelOptions(list, current){
-    const set = new Set(list);
-    if(current) set.add(current);
-    modelSel.innerHTML = '';
-    [...set].forEach(m => { const o=document.createElement('option'); o.value=m; o.textContent=m;
-      if(m===current) o.selected=true; modelSel.appendChild(o); });
-    if(!modelSel.options.length){ const o=document.createElement('option'); o.textContent='(set key)'; modelSel.appendChild(o); }
-  }
-
-  modelSel.addEventListener('change', () => { api.saveConfig && api.saveConfig({ geminiModel: modelSel.value }); });
-  webToggle.addEventListener('change', () => { api.saveConfig && api.saveConfig({ webSearch: webToggle.checked }); });
-  gear.addEventListener('click', () => settings.classList.toggle('show'));
-  closeBtn.addEventListener('click', () => api.closeChat && api.closeChat());
-
-  listModelsBtn.addEventListener('click', async () => {
+  webSwitch.addEventListener('click', () => { webOn = !webOn; webSwitch.classList.toggle('on', webOn); api.saveConfig && api.saveConfig({ webSearch: webOn }); });
+  modelSel.addEventListener('change', () => { api.saveConfig && api.saveConfig({ geminiModel: modelSel.value }); refreshConfig(); });
+  $('listModels').addEventListener('click', async () => {
     if(!api.listModels) return;
     if(keyInput.value.trim() && api.saveConfig){ await api.saveConfig({geminiKey:keyInput.value.trim()}); keyInput.value=''; await refreshConfig(); }
-    modelStatus.textContent = 'loading…';
+    skeyStatus.textContent = 'loading models…';
     const r = await api.listModels();
-    if(r && r.ok && r.models.length){ setModelOptions(r.models, modelSel.value); modelStatus.textContent = r.models.length+' models'; }
-    else if(r && r.code==='NO_KEY'){ modelStatus.textContent = 'save your key first'; }
-    else { modelStatus.textContent = (r && r.error) ? r.error.slice(0,50) : 'failed'; }
+    if(r && r.ok && r.models.length){ setModelOptions(r.models, modelSel.value); skeyStatus.textContent = r.models.length+' models'; }
+    else if(r && r.code==='NO_KEY'){ skeyStatus.textContent = 'save your key first'; }
+    else { skeyStatus.textContent = (r&&r.error) ? r.error.slice(0,50) : 'failed'; }
   });
-
-  saveKey.addEventListener('click', async () => {
-    const patch = { webSearch: webToggle.checked };
+  $('saveKey').addEventListener('click', async () => {
+    const patch = { webSearch: webOn };
     if(keyInput.value.trim()) patch.geminiKey = keyInput.value.trim();
     if(modelSel.value) patch.geminiModel = modelSel.value;
     if(api.saveConfig) await api.saveConfig(patch);
-    keyInput.value = ''; await refreshConfig();
-    settings.classList.remove('show');
+    keyInput.value=''; await refreshConfig(); closeSheets();
   });
 
+  // ---- saved list ----
+  const invList = $('invList'), savedCount = $('savedCount');
+  async function refreshCount(){
+    if(!api.listInvestors) return;
+    const items = await api.listInvestors();
+    const lc = $('listCount'); if(lc) lc.textContent = items.length;
+    savedCount.textContent = items.length + ' saved';
+    if($('savedSheet').classList.contains('on')) renderInvestors(items);
+  }
+  function renderInvestors(items){
+    invList.innerHTML = '';
+    if(!items.length){ invList.innerHTML = '<div class="empty">Nothing saved yet.<br>Hit Save under a research reply.</div>'; return; }
+    items.forEach(it => {
+      const row = document.createElement('div'); row.className='invrow';
+      const sub = [it.stage,it.focus,it.location,it.contact,it.source].filter(Boolean).join(' · ');
+      row.innerHTML = '<div class="invmain"><b>'+esc(it.name||it.firm)+'</b>'+(it.name&&it.firm?' · '+esc(it.firm):'')+'</div>'+
+        (sub?'<div class="invsub">'+esc(sub)+'</div>':'')+'<span class="invx">✕</span>';
+      row.querySelector('.invx').addEventListener('click', async ()=>{ await api.removeInvestor(it.id); refreshCount(); });
+      invList.appendChild(row);
+    });
+  }
+  $('exportCsv').addEventListener('click', async () => {
+    if(!api.exportCsv) return; const r = await api.exportCsv();
+    savedCount.textContent = r&&r.ok ? ('exported '+r.count+' ✓') : (r&&r.canceled?savedCount.textContent:((r&&r.error)||'failed'));
+  });
+  $('clearInv').addEventListener('click', async () => { if(api.clearInvestors){ await api.clearInvestors(); renderInvestors([]); refreshCount(); } });
+
+  // ---- humanize ----
+  const humanCustom = $('humanCustom'), impSwitch = $('impSwitch'), humanStatus = $('humanStatus');
+  impSwitch.addEventListener('click', () => impSwitch.classList.toggle('on'));
+  async function runHumanize(mode, custom){
+    if(!api.humanize){ humanStatus.textContent='desktop app only'; return; }
+    humanStatus.textContent = 'on it — grabbing your selection…';
+    const r = await api.humanize({ mode, custom, imperfect: impSwitch.classList.contains('on') });
+    if(r && r.ok){ humanStatus.textContent = '✓ humanized & pasted back'; }
+    else if(r && r.code==='NO_SELECTION'){ humanStatus.textContent = 'select some text first, then pick a voice'; }
+    else if(r && r.code==='NO_PERMISSION'){ humanStatus.textContent = 'needs Accessibility — turn on “Mr Panda”, then retry'; if(api.openAccessibility) api.openAccessibility(); }
+    else if(r && r.code==='NO_KEY'){ humanStatus.textContent = 'set your Gemini key first'; }
+    else { humanStatus.textContent = (r&&r.error) ? r.error.slice(0,60) : 'failed'; }
+  }
+  document.querySelectorAll('.voice').forEach(el => el.addEventListener('click', () => {
+    const mode = el.dataset.mode;
+    if(mode==='custom'){ humanCustom.style.display='block'; humanCustom.focus(); return; }
+    runHumanize(mode);
+  }));
+  humanCustom.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); const v=humanCustom.value.trim(); if(v) runHumanize('custom', v); } });
+
   // ---- attachments ----
+  let attachments = [];
   function renderChips(){
     attachBar.innerHTML = '';
-    attachments.forEach((a, i) => {
-      const c = document.createElement('span'); c.className = 'chipf';
-      c.innerHTML = (a.mime.startsWith('image/') ? '🖼 ' : '📄 ') + esc(a.name) + ' <b>✕</b>';
-      c.querySelector('b').addEventListener('click', () => { attachments.splice(i,1); renderChips(); });
-      attachBar.appendChild(c);
-    });
+    attachments.forEach((a,i) => { const c=document.createElement('span'); c.className='chipf';
+      c.innerHTML = (a.mime.startsWith('image/')?'🖼 ':'📄 ')+esc(a.name)+' <b>✕</b>';
+      c.querySelector('b').addEventListener('click',()=>{ attachments.splice(i,1); renderChips(); }); attachBar.appendChild(c); });
   }
-  function guessMime(name, type){
-    if(type) return type;
-    const n = name.toLowerCase();
-    if(n.endsWith('.md')) return 'text/markdown';
-    if(n.endsWith('.csv')) return 'text/csv';
-    if(n.endsWith('.json')) return 'application/json';
-    if(n.endsWith('.txt')) return 'text/plain';
-    if(n.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    if(n.endsWith('.pdf')) return 'application/pdf';
-    return 'text/plain';
-  }
-  function addFiles(files){
-    [...files].forEach(f => {
-      if(f.size > 18*1024*1024){ addMsg('err', 'Skipped '+f.name+' — over 18MB.'); return; }
-      const r = new FileReader();
-      r.onload = () => { const b64 = String(r.result).split(',')[1] || '';
-        attachments.push({ name: f.name, mime: guessMime(f.name, f.type), dataBase64: b64 }); renderChips(); };
-      r.readAsDataURL(f);
-    });
-  }
-  clip.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value=''; });
-  window.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('show'); });
-  window.addEventListener('dragleave', e => { if(e.relatedTarget===null) drop.classList.remove('show'); });
-  window.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('show'); if(e.dataTransfer) addFiles(e.dataTransfer.files); });
+  function guessMime(name,type){ if(type) return type; const n=name.toLowerCase();
+    if(n.endsWith('.md'))return'text/markdown'; if(n.endsWith('.csv'))return'text/csv';
+    if(n.endsWith('.json'))return'application/json'; if(n.endsWith('.txt'))return'text/plain';
+    if(n.endsWith('.docx'))return'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if(n.endsWith('.pdf'))return'application/pdf'; return'text/plain'; }
+  function addFiles(files){ [...files].forEach(f => { if(f.size>18*1024*1024){ pushMsg('err','Skipped '+f.name+' — over 18MB.'); return; }
+    const r=new FileReader(); r.onload=()=>{ const b64=String(r.result).split(',')[1]||'';
+      attachments.push({name:f.name,mime:guessMime(f.name,f.type),dataBase64:b64}); renderChips(); }; r.readAsDataURL(f); }); }
+  $('clip').addEventListener('click',()=>fileInput.click());
+  fileInput.addEventListener('change',()=>{ addFiles(fileInput.files); fileInput.value=''; });
+  window.addEventListener('dragover',e=>e.preventDefault());
+  window.addEventListener('drop',e=>{ e.preventDefault(); if(e.dataTransfer) addFiles(e.dataTransfer.files); });
 
   // ---- send ----
-  inp.addEventListener('input', () => { inp.style.height='34px'; inp.style.height=Math.min(inp.scrollHeight,96)+'px'; });
+  inp.addEventListener('input',()=>{ inp.style.height='38px'; inp.style.height=Math.min(inp.scrollHeight,110)+'px'; });
   async function reply(){
     const text = inp.value.trim();
     if((!text && !attachments.length) || awaiting) return;
     const sending = attachments.slice();
-    addMsg('user', text || '(sent '+sending.length+' file'+(sending.length>1?'s':'')+')');
-    inp.value=''; inp.style.height='34px'; attachments=[]; renderChips();
-    if(!api.ask){ addMsg('err','Chat only works in the desktop app.'); return; }
-    awaiting=true; send.disabled=true;
-    const t = addThinking();
-    const r = await api.ask(text, sending);
+    pushMsg('user', text || ('(sent '+sending.length+' file'+(sending.length>1?'s':'')+')'));
+    inp.value=''; inp.style.height='38px'; attachments=[]; renderChips();
+    if(!api.ask){ pushMsg('err','Chat only works in the desktop app.'); return; }
+    awaiting=true; const t = addThinking();
+    const r = await api.ask(text, sending, tab);
     t.remove();
-    if(r && r.ok){ const el = addMsg('panda', r.text); attachSave(el, r.text); }
-    else if(r && r.code==='NO_KEY'){ addMsg('err','I need a Gemini key — open ⚙ and paste one.'); settings.classList.add('show'); }
-    else addMsg('err', "That didn't work: " + ((r && r.error) || 'unknown error'));
-    awaiting=false; send.disabled=false; inp.focus();
+    if(r && r.ok){ pushMsg('panda', r.text); }
+    else if(r && r.code==='NO_KEY'){ pushMsg('err','I need a Gemini key — open Settings and paste one.'); openSheet('settingsSheet'); }
+    else { pushMsg('err', "That didn't work: " + ((r&&r.error)||'unknown error')); }
+    awaiting=false; inp.focus();
   }
-  send.addEventListener('click', reply);
+  $('send').addEventListener('click', reply);
   inp.addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); reply(); } });
 
-  // ---- saved investors ----
-  function esc2(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  async function refreshCount(){
-    if(!api.listInvestors) return;
-    const items = await api.listInvestors();
-    listCount.textContent = items.length;
-    lcount.textContent = items.length + ' saved';
-    if(listPanel.classList.contains('show')) renderInvestors(items);
-  }
-  function renderInvestors(items){
-    invList.innerHTML = '';
-    items.forEach(it => {
-      const row = document.createElement('div'); row.className = 'invrow';
-      const sub = [it.stage, it.focus, it.location, it.contact, it.source].filter(Boolean).join(' · ');
-      row.innerHTML = '<div class="invmain"><b>' + esc2(it.name || it.firm) + '</b>' +
-        (it.name && it.firm ? ' · ' + esc2(it.firm) : '') + '</div>' +
-        (sub ? '<div class="invsub">' + esc2(sub) + '</div>' : '') +
-        '<span class="invx" title="remove">✕</span>';
-      row.querySelector('.invx').addEventListener('click', async () => { await api.removeInvestor(it.id); refreshCount(); });
-      invList.appendChild(row);
-    });
-  }
-  listBtn.addEventListener('click', async () => {
-    const show = !listPanel.classList.contains('show');
-    listPanel.classList.toggle('show', show);
-    if(show){ settings.classList.remove('show'); if(api.listInvestors) renderInvestors(await api.listInvestors()); }
-  });
-  exportCsv.addEventListener('click', async () => {
-    if(!api.exportCsv) return;
-    const r = await api.exportCsv();
-    if(r && r.ok) lcount.textContent = 'exported ' + r.count + ' → CSV ✓';
-    else if(!(r && r.canceled)) lcount.textContent = (r && r.error) || 'export failed';
-  });
-  clearInv.addEventListener('click', async () => {
-    if(!api.clearInvestors) return;
-    await api.clearInvestors(); renderInvestors([]); refreshCount();
-  });
-  function attachSave(el, text){
-    el.appendChild(document.createElement('br'));
-    if(api.copyText){
-      const cp = document.createElement('button'); cp.className = 'savebtn'; cp.textContent = '📋 Copy';
-      cp.addEventListener('click', () => { api.copyText(text); cp.textContent = '✓ copied';
-        setTimeout(() => { cp.textContent = '📋 Copy'; }, 1500); });
-      el.appendChild(cp);
-    }
-    if(api.pasteIntoBox){
-      const pb = document.createElement('button'); pb.className = 'savebtn'; pb.style.marginLeft = '6px';
-      pb.textContent = '⌨️ Paste into box';
-      pb.addEventListener('click', async () => {
-        pb.disabled = true; pb.textContent = 'pasting…';
-        const r = await api.pasteIntoBox(text);
-        if(r && r.ok){ pb.textContent = '✓ pasted'; }
-        else if(r && r.code === 'NO_PERMISSION'){
-          pb.textContent = '⚠ needs permission';
-          addMsg('err', 'To paste on screen I need Accessibility access. I just opened the right settings page — turn on “Mr Panda”, then click Paste again.');
-          if(api.openAccessibility) api.openAccessibility();
-        } else { pb.textContent = 'paste failed'; }
-        setTimeout(() => { pb.textContent = '⌨️ Paste into box'; pb.disabled = false; }, 2500);
-      });
-      el.appendChild(pb);
-    }
-    if(api.saveFromReply){
-      const b = document.createElement('button'); b.className = 'savebtn'; b.style.marginLeft = '6px';
-      b.textContent = '📌 Save to list';
-      b.addEventListener('click', async () => {
-        b.disabled = true; b.textContent = 'saving…';
-        const r = await api.saveFromReply(text);
-        if(r && r.ok){ b.textContent = r.added ? '✓ added ' + r.added : (r.found ? '✓ already saved' : 'nothing to save'); refreshCount(); }
-        else if(r && r.code === 'NO_KEY'){ b.textContent = 'set your key first'; b.disabled = false; }
-        else { b.textContent = 'couldn’t save'; }
-      });
-      el.appendChild(b);
-    }
-  }
-
-  // ---- humanize ----
-  const humanBtn = $('humanBtn'), humanPanel = $('humanPanel'), humanCustom = $('humanCustom'),
-        imperfect = $('imperfect'), humanStatus = $('humanStatus');
-  humanBtn.addEventListener('click', () => {
-    const show = !humanPanel.classList.contains('show');
-    humanPanel.classList.toggle('show', show);
-    if(show){ settings.classList.remove('show'); listPanel.classList.remove('show'); }
-  });
-  async function runHumanize(mode, custom){
-    if(!api.humanize){ humanStatus.textContent = 'desktop app only'; return; }
-    humanStatus.textContent = 'on it — grabbing your selection…';
-    const r = await api.humanize({ mode, custom, imperfect: imperfect.checked });
-    if(r && r.ok){ humanStatus.textContent = '✓ humanized & pasted back'; }
-    else if(r && r.code === 'NO_SELECTION'){ humanStatus.textContent = 'select some text first, then pick a voice'; }
-    else if(r && r.code === 'NO_PERMISSION'){
-      humanStatus.textContent = 'needs Accessibility';
-      addMsg('err', 'To grab & paste I need Accessibility access — turn on “Mr Panda” in the settings I just opened, then try again.');
-      if(api.openAccessibility) api.openAccessibility();
-    }
-    else if(r && r.code === 'NO_KEY'){ humanStatus.textContent = 'set your Gemini key first (⚙)'; }
-    else { humanStatus.textContent = (r && r.error) ? r.error.slice(0, 60) : 'failed'; }
-  }
-  document.querySelectorAll('.hmode').forEach(el => {
-    el.addEventListener('click', () => {
-      const mode = el.getAttribute('data-mode');
-      if(mode === 'custom'){ humanCustom.style.display = 'block'; humanCustom.focus(); return; }
-      runHumanize(mode);
-    });
-  });
-  humanCustom.addEventListener('keydown', (e) => {
-    if(e.key === 'Enter'){ e.preventDefault(); const v = humanCustom.value.trim(); if(v) runHumanize('custom', v); }
-  });
-
+  // ---- boot ----
+  inp.placeholder = PLACEHOLDER[tab];
+  renderTools(); greetOnce();
   refreshConfig();
-  refreshCount();
-  // Pull the full model list once on open (if a key is already saved).
   (async () => { if(api.listModels){ const r = await api.listModels(); if(r && r.ok && r.models.length) setModelOptions(r.models, modelSel.value); } })();
 </script>
 </body>

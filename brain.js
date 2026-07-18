@@ -74,8 +74,13 @@ async function postGemini(url, body, ms) {
   } finally { clearTimeout(to); }
 }
 
-async function ask(history, attachments) {
-  if (cfg.provider === 'gemini') return askGemini(history, attachments);
+const MODE_NOTE = {
+  research: ' You are in RESEARCH mode right now: focus on finding and vetting investors, companies, and markets. Lean on web search, cite sources, and never invent contacts or figures.',
+  write: ' You are in WRITE mode right now: focus on drafting and polishing emails, messages, and copy. When asked to write something, output the ready-to-send draft only.'
+};
+
+async function ask(history, attachments, mode) {
+  if (cfg.provider === 'gemini') return askGemini(history, attachments, mode);
   if (cfg.provider === 'anthropic') { const e = new Error('Claude support is planned for later.'); e.code = 'NO_PROVIDER'; throw e; }
   const e = new Error('No brain provider configured.'); e.code = 'NO_PROVIDER'; throw e;
 }
@@ -106,7 +111,7 @@ async function attachmentsToParts(attachments) {
   return parts;
 }
 
-async function askGemini(history, attachments) {
+async function askGemini(history, attachments, mode) {
   if (!cfg.geminiKey) { const e = new Error('No API key set.'); e.code = 'NO_KEY'; throw e; }
   const model = cfg.geminiModel || 'gemini-2.0-flash';
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
@@ -124,7 +129,7 @@ async function askGemini(history, attachments) {
   }
 
   const body = {
-    system_instruction: { parts: [{ text: SYSTEM }] },
+    system_instruction: { parts: [{ text: SYSTEM + (MODE_NOTE[mode] || '') }] },
     contents,
     // Generous budget: "thinking" models spend tokens reasoning before they
     // answer, so a small cap gets the reply chopped off mid-sentence.
