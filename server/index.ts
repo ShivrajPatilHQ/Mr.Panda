@@ -18,6 +18,11 @@ const PORT = parseInt(env.PORT || '8080', 10);
 const APP_TOKEN = env.APP_TOKEN || '';
 const ADMIN_TOKEN = env.ADMIN_TOKEN || '';
 const DAY_TZ = env.DAY_TZ || 'Asia/Kolkata';
+// Email for the passwordless restore code. If RESEND_API_KEY is unset the code
+// is logged to the server console (dev mode) so the flow is testable now.
+const RESEND_API_KEY = env.RESEND_API_KEY || '';
+const EMAIL_FROM = env.EMAIL_FROM || 'Mr. Panda <onboarding@resend.dev>';
+const CODE_TTL_MS = 10 * 60 * 1000;
 
 // ---------- Mongo (non-fatal connect so /health works even if DB is down) ----------
 let db: any = null, mongoOk = false;
@@ -28,6 +33,10 @@ async function connectMongo() {
     await client.connect();
     db = client.db(MONGO_DB);
     await db.collection('usage').createIndex({ deviceId: 1, day: 1 });
+    await db.collection('accounts').createIndex({ email: 1 }, { unique: true });
+    await db.collection('devices').createIndex({ accountId: 1 });
+    // loginCodes auto-expire via a TTL index on expiresAt.
+    await db.collection('loginCodes').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
     mongoOk = true;
     console.log('[db] connected to', MONGO_DB);
   } catch (e: any) {
@@ -40,8 +49,11 @@ connectMongo();
 const devices = () => db.collection('devices');
 const usage = () => db.collection('usage');
 const counters = () => db.collection('counters');
+const accounts = () => db.collection('accounts');
+const loginCodes = () => db.collection('loginCodes');
 
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: DAY_TZ });
+const normEmail = (e: string) => String(e || '').trim().toLowerCase();
 
 async function ensureDevice(deviceId: string) {
   const now = new Date();
@@ -51,6 +63,42 @@ async function ensureDevice(deviceId: string) {
     { upsert: true }
   );
   return devices().findOne({ _id: deviceId });
+}
+
+// A device is Pro if its linked account has an active (unexpired) pro plan.
+// Falls back to the legacy device.plan for anything not yet on an account.
+async function isProDevice(device: any): Promise<{ pro: boolean; account?: any }> {
+  if (device?.accountId) {
+    const acct: any = await accounts().findOne({ _id: device.accountId });
+    if (acct && acct.plan === 'pro' && (!acct.proUntil || new Date(acct.proUntil) > new Date())) {
+      return { pro: true, account: acct };
+    }
+    return { pro: false, account: acct || undefined };
+  }
+  const legacy = device?.plan === 'pro' && (!device.proUntil || new Date(device.proUntil) > new Date());
+  return { pro: legacy };
+}
+
+// Send the 6-digit restore code. Real email via Resend when configured,
+// otherwise logged to the console so the flow works in dev/testing.
+async function sendCode(email: string, code: string) {
+  if (!RESEND_API_KEY) {
+    console.log(`[email:dev] restore code for ${email}: ${code}`);
+    return true;
+  }
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + RESEND_API_KEY },
+      body: JSON.stringify({
+        from: EMAIL_FROM, to: [email],
+        subject: 'Your Mr. Panda code: ' + code,
+        text: `Your Mr. Panda restore code is ${code}. It expires in 10 minutes. If you didn't request this, ignore this email.`
+      })
+    });
+    if (!res.ok) { console.error('[email] resend failed', res.status); return false; }
+    return true;
+  } catch (e: any) { console.error('[email] resend error', e.message); return false; }
 }
 // Atomically consume one use if under the daily limit. Returns {ok,count}.
 async function tryConsume(deviceId: string, day: string, limit: number) {
@@ -201,11 +249,15 @@ app.get('/v1/me', async (c) => {
   const deviceId = String(c.req.query('device') || '').trim();
   if (!deviceId) return c.json({ ok: false, code: 'NO_DEVICE' }, 400);
   const device: any = await ensureDevice(deviceId);
-  const isPro = device.plan === 'pro' && (!device.proUntil || new Date(device.proUntil) > new Date());
+  const { pro, account } = await isProDevice(device);
   const day = today();
   const u: any = await usage().findOne({ _id: `${deviceId}:${day}` });
   const usedToday = u?.count || 0;
-  return c.json({ ok: true, plan: isPro ? 'pro' : 'free', limit: FREE_LIMIT, usedToday, remaining: isPro ? null : Math.max(0, FREE_LIMIT - usedToday) });
+  return c.json({
+    ok: true, plan: pro ? 'pro' : 'free', limit: FREE_LIMIT, usedToday,
+    remaining: pro ? null : Math.max(0, FREE_LIMIT - usedToday),
+    email: account?.email || null
+  });
 });
 
 app.post('/v1/generate', async (c) => {
@@ -220,7 +272,7 @@ app.post('/v1/generate', async (c) => {
   if (!deviceId) return c.json({ ok: false, code: 'NO_DEVICE' }, 400);
 
   const device: any = await ensureDevice(deviceId);
-  const isPro = device.plan === 'pro' && (!device.proUntil || new Date(device.proUntil) > new Date());
+  const { pro: isPro } = await isProDevice(device);
   const countable = kind !== 'extract';
   const day = today();
 
@@ -249,10 +301,110 @@ app.get('/v1/admin/stats', async (c) => {
   if (!ADMIN_TOKEN || c.req.query('token') !== ADMIN_TOKEN) return c.json({ ok: false }, 403);
   if (!mongoOk) return c.json({ ok: false, code: 'DB_DOWN' }, 503);
   const day = today();
-  const [totalDevices, proDevices, g] = await Promise.all([
-    devices().countDocuments({}), devices().countDocuments({ plan: 'pro' }), counters().findOne({ _id: `global:${day}` })
+  const [totalDevices, totalAccounts, proAccounts, g] = await Promise.all([
+    devices().countDocuments({}),
+    accounts().countDocuments({}),
+    accounts().countDocuments({ plan: 'pro' }),
+    counters().findOne({ _id: `global:${day}` })
   ]);
-  return c.json({ ok: true, day, totalDevices, proDevices, freeUsesToday: (g as any)?.count || 0, globalCap: GLOBAL_CAP, freeLimit: FREE_LIMIT });
+  return c.json({
+    ok: true, day, totalDevices, totalAccounts, proAccounts,
+    freeUsesToday: (g as any)?.count || 0, globalCap: GLOBAL_CAP, freeLimit: FREE_LIMIT
+  });
+});
+
+// ---------- accounts (passwordless restore) ----------
+async function ensureAccount(email: string) {
+  await accounts().updateOne(
+    { email },
+    { $setOnInsert: { _id: crypto.randomUUID(), email, plan: 'free', createdAt: new Date() } },
+    { upsert: true }
+  );
+  return accounts().findOne({ email });
+}
+
+// Send a 6-digit code to an email so a paying user can restore Pro on a new Mac.
+app.post('/v1/account/request-code', async (c) => {
+  if (rateLimited(ipOf(c))) return c.json({ ok: false, code: 'RATE' }, 429);
+  if (!mongoOk) return c.json({ ok: false, code: 'DB_DOWN' }, 503);
+  const body: any = await c.req.json().catch(() => ({}));
+  const email = normEmail(body.email);
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return c.json({ ok: false, code: 'BAD_EMAIL' }, 400);
+
+  // one code per email at a time; throttle to one send per 30s
+  const existing: any = await loginCodes().findOne({ _id: email });
+  if (existing && existing.sentAt && Date.now() - new Date(existing.sentAt).getTime() < 30000) {
+    return c.json({ ok: false, code: 'TOO_SOON' }, 429);
+  }
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  await loginCodes().updateOne(
+    { _id: email },
+    { $set: { email, code, attempts: 0, sentAt: new Date(), expiresAt: new Date(Date.now() + CODE_TTL_MS) } },
+    { upsert: true }
+  );
+  await sendCode(email, code);
+  return c.json({ ok: true }); // never reveal whether the email exists
+});
+
+// Verify the code, link this device to the account, return the resolved plan.
+app.post('/v1/account/verify-code', async (c) => {
+  if (rateLimited(ipOf(c))) return c.json({ ok: false, code: 'RATE' }, 429);
+  if (!mongoOk) return c.json({ ok: false, code: 'DB_DOWN' }, 503);
+  const body: any = await c.req.json().catch(() => ({}));
+  const email = normEmail(body.email);
+  const code = String(body.code || '').trim();
+  const deviceId = String(body.deviceId || '').trim();
+  if (!email || !code || !deviceId) return c.json({ ok: false, code: 'MISSING' }, 400);
+
+  const rec: any = await loginCodes().findOne({ _id: email });
+  if (!rec || new Date(rec.expiresAt) < new Date()) return c.json({ ok: false, code: 'EXPIRED' }, 400);
+  if ((rec.attempts || 0) >= 5) { await loginCodes().deleteOne({ _id: email }); return c.json({ ok: false, code: 'TOO_MANY' }, 429); }
+  if (rec.code !== code) {
+    await loginCodes().updateOne({ _id: email }, { $inc: { attempts: 1 } });
+    return c.json({ ok: false, code: 'BAD_CODE' }, 400);
+  }
+  await loginCodes().deleteOne({ _id: email });
+
+  const acct: any = await ensureAccount(email);
+  await ensureDevice(deviceId);
+  await devices().updateOne({ _id: deviceId }, { $set: { accountId: acct._id } });
+  const device: any = await devices().findOne({ _id: deviceId });
+  const { pro } = await isProDevice(device);
+  return c.json({ ok: true, plan: pro ? 'pro' : 'free', email });
+});
+
+// ---------- admin (Razorpay comes later; this is the manual switch to test Pro) ----------
+function adminOk(c: any) { return ADMIN_TOKEN && c.req.query('token') === ADMIN_TOKEN; }
+
+app.post('/v1/admin/mark-pro', async (c) => {
+  if (!adminOk(c)) return c.json({ ok: false }, 403);
+  if (!mongoOk) return c.json({ ok: false, code: 'DB_DOWN' }, 503);
+  const body: any = await c.req.json().catch(() => ({}));
+  const email = normEmail(body.email);
+  if (!email) return c.json({ ok: false, code: 'BAD_EMAIL' }, 400);
+  const months = Math.max(1, parseInt(body.months || '1', 10) || 1);
+  await ensureAccount(email);
+  const proUntil = new Date(Date.now() + months * 31 * 24 * 3600 * 1000);
+  await accounts().updateOne({ email }, { $set: { plan: 'pro', status: 'active', proUntil } });
+  return c.json({ ok: true, email, plan: 'pro', proUntil });
+});
+
+app.post('/v1/admin/unmark-pro', async (c) => {
+  if (!adminOk(c)) return c.json({ ok: false }, 403);
+  if (!mongoOk) return c.json({ ok: false, code: 'DB_DOWN' }, 503);
+  const body: any = await c.req.json().catch(() => ({}));
+  const email = normEmail(body.email);
+  if (!email) return c.json({ ok: false, code: 'BAD_EMAIL' }, 400);
+  await accounts().updateOne({ email }, { $set: { plan: 'free', status: 'canceled' } });
+  return c.json({ ok: true, email, plan: 'free' });
+});
+
+app.get('/v1/admin/accounts', async (c) => {
+  if (!adminOk(c)) return c.json({ ok: false }, 403);
+  if (!mongoOk) return c.json({ ok: false, code: 'DB_DOWN' }, 503);
+  const list = await accounts().find({}, { projection: { code: 0 } }).sort({ createdAt: -1 }).limit(500).toArray();
+  const proCount = list.filter((a: any) => a.plan === 'pro').length;
+  return c.json({ ok: true, total: list.length, pro: proCount, accounts: list });
 });
 
 console.log(`[mrpanda] listening on :${PORT} (free ${FREE_LIMIT}/day, cap ${GLOBAL_CAP}/day, tz ${DAY_TZ})`);
