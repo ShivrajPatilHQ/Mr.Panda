@@ -85,7 +85,7 @@ const MODE_NOTE: any = {
 const HUMANIZE_MODES: any = {
   subtle: "Voice: keep it professional but trim filler and hedging, use contractions, prefer plain words, and vary sentence length.",
   human: "Voice: warm and conversational, like a sharp human talking to a colleague. Loosen stiff corporate phrasing, drop clichés and AI tells.",
-  ceo: "Voice: a busy founder/CEO — very short, direct, mostly lowercase, no fluff. Cut to essentials. It may end with 'sent from my iphone'.",
+  ceo: "Voice: a busy founder/CEO — very short, direct, confident, no fluff. Cut to essentials. No gimmicks, no fake signatures.",
   founder: "Voice: punchy, confident founder energy — direct, specific, high-energy, short sentences, no corporate hedging."
 };
 

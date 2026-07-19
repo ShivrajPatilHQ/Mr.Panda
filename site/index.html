@@ -33,7 +33,6 @@
   a { color: inherit; text-decoration: none; }
   canvas { image-rendering: pixelated; }
 
-  /* cursor glow */
   #glow {
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
     background: radial-gradient(520px circle at var(--gx, 50%) var(--gy, 30%), rgba(229,72,77,.055), transparent 65%);
@@ -58,12 +57,12 @@
   .nav-links .btn:hover { border-color: #43434c; background: var(--surface); }
 
   /* hero */
-  .hero { padding: 92px 0 96px; text-align: center; position: relative; z-index: 1; }
+  .hero { padding: 80px 0 90px; text-align: center; position: relative; z-index: 1; }
   .pill {
     display: inline-flex; align-items: center; gap: 8px;
     font-size: 12.5px; font-weight: 500; color: var(--muted);
     border: 1px solid var(--border); border-radius: 100px;
-    padding: 6px 14px; margin-bottom: 40px; background: rgba(16,16,19,.6);
+    padding: 6px 14px; margin-bottom: 44px; background: rgba(16,16,19,.6);
   }
   .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
 
@@ -84,7 +83,7 @@
     transform: rotate(45deg);
   }
   #bubble.show { opacity: 1; }
-  #bubble .caret { display: inline-block; width: 6px; height: 12px; background: var(--accent); vertical-align: -1px; animation: blinkc 1s steps(1) infinite; }
+  .caret { display: inline-block; width: 6px; height: 12px; background: var(--accent); vertical-align: -1px; animation: blinkc 1s steps(1) infinite; }
   @keyframes blinkc { 50% { opacity: 0; } }
 
   h1 {
@@ -129,15 +128,57 @@
 
   .rule { border: none; border-top: 1px solid var(--border); }
 
-  /* demo */
-  .demo { padding: 100px 0; position: relative; z-index: 1; }
   .kicker {
     font-size: 12.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
     color: var(--accent); margin-bottom: 14px;
   }
   h2 { font-size: clamp(28px, 4.2vw, 40px); font-weight: 700; letter-spacing: -0.032em; line-height: 1.15; }
-  .demo .head { max-width: 640px; margin-bottom: 46px; }
-  .demo .head p { color: var(--muted); margin-top: 14px; font-size: 16px; }
+  .head { max-width: 640px; margin-bottom: 46px; }
+  .head p { color: var(--muted); margin-top: 14px; font-size: 16px; }
+
+  /* ============ app replay ============ */
+  .replay { padding: 96px 0; position: relative; z-index: 1; }
+  .replay .center { display: flex; justify-content: center; }
+  .app-window {
+    width: min(660px, 100%); background: #ffffff; color: #1b1b20;
+    border-radius: 16px; overflow: hidden; text-align: left;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.07);
+  }
+  .app-head { display: flex; align-items: center; gap: 8px; padding: 13px 16px; border-bottom: 1px solid #ececef; }
+  .tl { width: 12px; height: 12px; border-radius: 50%; }
+  .app-id { display: flex; align-items: center; gap: 9px; margin-left: 10px; }
+  .app-id .nm { font-size: 13px; font-weight: 600; line-height: 1.1; }
+  .app-id .st { font-size: 10.5px; color: #9a9aa2; }
+  .app-tabs { display: flex; padding: 0 16px; border-bottom: 1px solid #ececef; }
+  .app-tab {
+    font-size: 12.5px; font-weight: 500; color: #8a8a92; padding: 10px 2px 11px; margin-right: 22px;
+    border-bottom: 2px solid transparent; transition: color .2s, border-color .2s;
+  }
+  .app-tab.on { color: #1b1b20; border-bottom-color: #1b1b20; }
+  .app-log {
+    height: 316px; padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    overflow: hidden; font-size: 12.5px; line-height: 1.55;
+  }
+  .m { max-width: 86%; padding: 8px 12px; border-radius: 13px; white-space: pre-wrap; word-wrap: break-word; }
+  .m.u { align-self: flex-end; background: #1b1b20; color: #fff; border-bottom-right-radius: 4px; }
+  .m.p { align-self: flex-start; background: #f4f4f6; color: #1b1b20; border-bottom-left-radius: 4px; }
+  .m.p .src { color: #8a8a92; font-size: 11px; }
+  .m.dots span { display: inline-block; width: 5px; height: 5px; margin: 0 1.5px; border-radius: 50%; background: #b3b3ba; animation: dot 1.2s infinite; }
+  .m.dots span:nth-child(2) { animation-delay: .18s; } .m.dots span:nth-child(3) { animation-delay: .36s; }
+  @keyframes dot { 0%,70%,100%{opacity:.3} 35%{opacity:1} }
+  .acts { display: flex; gap: 6px; align-self: flex-start; margin: -2px 0 0 4px; }
+  .acts span {
+    font-size: 10.5px; color: #6a6a72; border: 1px solid #e4e4e8; border-radius: 7px; padding: 3px 9px; background: #fff;
+  }
+  .app-composer { display: flex; align-items: center; gap: 9px; padding: 12px 14px; border-top: 1px solid #ececef; }
+  .app-input {
+    flex: 1; font-size: 12.5px; color: #9a9aa2; background: #f4f4f6;
+    border: 1px solid #ececef; border-radius: 11px; padding: 9px 13px;
+  }
+  .app-send { width: 32px; height: 32px; border-radius: 10px; background: #1b1b20; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+
+  /* ============ humanize demo ============ */
+  .demo { padding: 10px 0 100px; position: relative; z-index: 1; }
   .demo-box {
     border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
     overflow: hidden; max-width: 760px;
@@ -153,7 +194,7 @@
     font-family: 'JetBrains Mono', monospace; font-size: 14.5px; line-height: 1.85;
     color: var(--text); min-height: 132px; white-space: pre-wrap;
   }
-  #demoText .caret { display: inline-block; width: 7px; height: 15px; background: var(--accent); vertical-align: -2px; animation: blinkc 1s steps(1) infinite; }
+  #demoText .caret { width: 7px; height: 15px; vertical-align: -2px; }
   .chips { display: flex; gap: 10px; flex-wrap: wrap; padding: 0 28px 26px; }
   .chip {
     cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted);
@@ -167,9 +208,7 @@
   .demo-note { margin-top: 18px; font-size: 13px; color: var(--faint); }
 
   /* features */
-  .features { padding: 30px 0 100px; position: relative; z-index: 1; }
-  .features .head { max-width: 620px; margin-bottom: 52px; }
-  .features .head p { color: var(--muted); margin-top: 14px; font-size: 16px; }
+  .features { padding: 10px 0 100px; position: relative; z-index: 1; }
   .fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
   .f {
     position: relative; border: 1px solid var(--border); border-radius: 14px;
@@ -187,22 +226,39 @@
     color: var(--accent); margin-bottom: 14px; letter-spacing: .04em;
   }
 
-  /* band */
-  .band { padding: 10px 0 100px; position: relative; z-index: 1; }
-  .band .inner {
+  /* ============ pricing ============ */
+  .pricing { padding: 10px 0 110px; position: relative; z-index: 1; }
+  .pgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; max-width: 780px; }
+  .plan {
     border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
-    padding: 52px 48px; display: flex; align-items: center; justify-content: space-between;
-    gap: 40px; flex-wrap: wrap;
+    padding: 34px 30px; position: relative;
   }
-  .band h2 { font-size: 26px; margin-bottom: 10px; }
-  .band p { color: var(--muted); font-size: 15px; max-width: 470px; }
-  .band p strong { color: var(--text); font-weight: 500; }
-  .price { text-align: right; }
-  .price .n { font-size: 44px; font-weight: 700; letter-spacing: -0.03em; }
-  .price .d { color: var(--faint); font-size: 13.5px; margin-top: 4px; }
+  .plan.hot { border-color: rgba(229,72,77,.5); }
+  .plan .badge {
+    position: absolute; top: -11px; left: 28px; font-size: 11px; font-weight: 600;
+    background: var(--accent); color: #fff; border-radius: 100px; padding: 3px 12px; letter-spacing: .03em;
+  }
+  .plan .pname { font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+  .plan .pprice { font-size: 42px; font-weight: 700; letter-spacing: -0.03em; margin: 10px 0 2px; }
+  .plan .pper { font-size: 13px; color: var(--faint); margin-bottom: 22px; }
+  .plan ul { list-style: none; display: flex; flex-direction: column; gap: 11px; margin-bottom: 28px; }
+  .plan li { font-size: 14px; color: var(--muted); padding-left: 24px; position: relative; }
+  .plan li strong { color: var(--text); font-weight: 500; }
+  .plan li::before { content: "✓"; position: absolute; left: 0; color: var(--accent); font-weight: 600; }
+  .plan .pbtn {
+    display: block; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border-strong); border-radius: 10px; padding: 11px 0; width: 100%;
+    background: transparent; color: var(--text); font-family: 'Inter', sans-serif;
+    transition: background .15s, border-color .15s;
+  }
+  .plan .pbtn:hover { background: var(--surface2); border-color: #43434c; }
+  .plan.hot .pbtn { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .plan.hot .pbtn:hover { opacity: .88; }
+  .psoon { margin-top: 20px; font-size: 13px; color: var(--faint); }
+  .psoon strong { color: var(--muted); font-weight: 500; }
 
   /* cta */
-  .cta { padding: 30px 0 130px; text-align: center; position: relative; z-index: 1; }
+  .cta { padding: 20px 0 130px; text-align: center; position: relative; z-index: 1; }
   .cta h2 { margin-bottom: 60px; }
   .cta .install { margin-top: 0; }
   #peekCv { position: absolute; left: 50%; transform: translateX(-50%); top: -57px; z-index: 0; }
@@ -215,19 +271,19 @@
   footer a { color: var(--muted); }
   footer a:hover { color: var(--text); }
 
-  /* reveal */
   .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s cubic-bezier(.2,.7,.3,1), transform .7s cubic-bezier(.2,.7,.3,1); }
   .reveal.in { opacity: 1; transform: none; }
 
   @media (max-width: 680px) {
-    .hero { padding: 64px 0 70px; }
+    .hero { padding: 56px 0 66px; }
     #bubble { left: 50%; top: -46px; transform: translateX(-50%); }
     #bubble::before { left: 50%; top: auto; bottom: -5px; transform: translateX(-50%) rotate(-45deg); }
     .cmd { flex-direction: column; align-items: stretch; }
     .copy { width: 100%; padding: 12px; }
-    .band .inner { padding: 38px 26px; }
-    .price { text-align: left; }
     .demo-body, .chips { padding-left: 20px; padding-right: 20px; }
+    .app-log { height: 340px; }
+    .nav-links { gap: 16px; }
+    .nav-links a:not(.btn) { display: none; }
   }
 </style>
 </head>
@@ -240,8 +296,9 @@
     Mr. Panda
   </a>
   <div class="nav-links">
-    <a href="#demo">Demo</a>
+    <a href="#replay">Demo</a>
     <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
     <a class="btn" href="https://github.com/ShivrajPatilHQ/Mr.Panda" target="_blank" rel="noopener">GitHub</a>
   </div>
 </div></nav>
@@ -276,11 +333,42 @@
 <hr class="rule">
 
 <div class="wrap">
+  <section class="replay reveal" id="replay">
+    <div class="head" style="text-align:center; margin-inline:auto;">
+      <div class="kicker">This is the actual app</div>
+      <h2>From research to sent.<br>One window.</h2>
+    </div>
+    <div class="center">
+      <div class="app-window">
+        <div class="app-head">
+          <span class="tl" style="background:#ff5f57"></span>
+          <span class="tl" style="background:#febc2e"></span>
+          <span class="tl" style="background:#28c840"></span>
+          <span class="app-id">
+            <canvas id="appAv" width="24" height="24" style="width:26px;height:26px"></canvas>
+            <span><span class="nm">Mr. Panda</span><br><span class="st">online · 4/5 free today</span></span>
+          </span>
+        </div>
+        <div class="app-tabs">
+          <span class="app-tab on" id="tabR">Research</span>
+          <span class="app-tab" id="tabW">Write</span>
+        </div>
+        <div class="app-log" id="appLog"></div>
+        <div class="app-composer">
+          <span class="app-input" id="appInput">Message Mr. Panda…</span>
+          <span class="app-send">↑</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="wrap">
   <section class="demo reveal" id="demo">
     <div class="head">
       <div class="kicker">Try it right here</div>
       <h2>Watch him fix a cold email.</h2>
-      <p>This is his Humanize feature — select robotic text in any app, pick a voice,
+      <p>His Humanize feature — select robotic text in any app, pick a voice,
       and he rewrites it in place. Pick one:</p>
     </div>
     <div class="demo-box">
@@ -297,7 +385,7 @@
         <button class="chip" data-voice="founder">Founder</button>
       </div>
     </div>
-    <p class="demo-note">Live in the app, this works on any text you select — Gmail, LinkedIn, Notion, anywhere.</p>
+    <p class="demo-note">In the app this works on any text you select — Gmail, LinkedIn, Notion, anywhere.</p>
   </section>
 </div>
 
@@ -320,7 +408,7 @@
       <div class="f"><span class="tag">humanize</span>
         <h3>De-AI any text</h3>
         <p>Select text anywhere, pick a voice — Subtle, Human, CEO, Founder, or describe your own —
-        and he rewrites it over your selection. Em-dashes eliminated.</p></div>
+        and he rewrites it over your selection, in place.</p></div>
       <div class="f"><span class="tag">collect</span>
         <h3>Contacts → CSV</h3>
         <p>Save contacts from research replies into a clean, deduplicated list — names, firms,
@@ -337,18 +425,41 @@
   </section>
 </div>
 
-<div class="wrap band reveal">
-  <div class="inner">
-    <div>
-      <h2>Free to start.</h2>
-      <p>Five messages a day on the house — <strong>no key, no signup</strong>.
-      Bring your own Gemini key for unlimited use, free forever.</p>
+<div class="wrap">
+  <section class="pricing reveal" id="pricing">
+    <div class="head">
+      <div class="kicker">Pricing</div>
+      <h2>Start free. Stay free if you like.</h2>
     </div>
-    <div class="price">
-      <div class="n">$0</div>
-      <div class="d">5 messages / day · BYOK unlimited</div>
+    <div class="pgrid">
+      <div class="plan hot">
+        <span class="badge">Start here</span>
+        <div class="pname">Free</div>
+        <div class="pprice">$0</div>
+        <div class="pper">forever</div>
+        <ul>
+          <li><strong>5 messages a day</strong>, on the house</li>
+          <li>Research, Write &amp; Humanize included</li>
+          <li>No account, no API key</li>
+          <li>Installs in 15 seconds</li>
+        </ul>
+        <button class="pbtn" data-copy>Copy install command</button>
+      </div>
+      <div class="plan">
+        <div class="pname">Bring your own key</div>
+        <div class="pprice">$0</div>
+        <div class="pper">unlimited · your Gemini key</div>
+        <ul>
+          <li><strong>Unlimited</strong> messages</li>
+          <li>Your key, stored only on your Mac</li>
+          <li>Sent only to Google, never to us</li>
+          <li>Switch anytime in Settings</li>
+        </ul>
+        <a class="pbtn" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini key ↗</a>
+      </div>
     </div>
-  </div>
+    <p class="psoon"><strong>Pro</strong> — unlimited hosted, no key needed — coming soon at ₹449/mo.</p>
+  </section>
 </div>
 
 <div class="wrap">
@@ -364,7 +475,7 @@
   </section>
 
   <footer>
-    <span>© 2026 Mr. Panda · built by Raj · he works for bamboo</span>
+    <span>© 2026 Mr. Panda · built by Raj</span>
     <a href="https://github.com/ShivrajPatilHQ/Mr.Panda" target="_blank" rel="noopener">Open source on GitHub ↗</a>
   </footer>
 </div>
@@ -386,8 +497,6 @@
   const PAL = { K:'#1c1c22', W:'#F2EFE4', N:'#1c1c22', S:'#0D1015', X:'#9FD8FF',
     T:'#2a2a32', H:'#F6F4EC', R:'#e5484d', D:'#E8C766' };
 
-  // eye glints live in the visor: base positions (5,6) and (18,6);
-  // they shift toward the cursor within the visor bounds.
   function drawPanda(ctx, rows, ox, oy, blink) {
     ctx.clearRect(0, 0, 24, rows.length);
     for (let r = 0; r < rows.length; r++)
@@ -400,7 +509,7 @@
     if (!blink) {
       const gy = 6 + oy;
       let lx = 5 + ox, rx = 18 + ox;
-      if (gy === 7) { lx = Math.max(5, lx); rx = Math.min(18, rx); } // row 7's visor is narrower
+      if (gy === 7) { lx = Math.max(5, lx); rx = Math.min(18, rx); }
       ctx.fillStyle = PAL.X;
       ctx.fillRect(lx, gy, 1, 1);
       ctx.fillRect(rx, gy, 1, 1);
@@ -411,9 +520,11 @@
   const heroCv = document.getElementById('pandaCv');
   const navCv = document.getElementById('navCv');
   const peekCv = document.getElementById('peekCv');
+  const appAv = document.getElementById('appAv');
   const heroCtx = heroCv.getContext('2d');
   const navCtx = navCv.getContext('2d');
   const peekCtx = peekCv.getContext('2d');
+  const appCtx = appAv.getContext('2d');
 
   let mouseX = innerWidth / 2, mouseY = innerHeight / 3;
   addEventListener('mousemove', (e) => {
@@ -424,7 +535,7 @@
 
   function eyeOffset(cv) {
     const r = cv.getBoundingClientRect();
-    const cx = r.left + r.width / 2, cy = r.top + r.height * 0.28; // eye line
+    const cx = r.left + r.width / 2, cy = r.top + r.height * 0.28;
     const dx = mouseX - cx, dy = mouseY - cy;
     const ox = Math.abs(dx) < 30 ? 0 : (dx > 0 ? 1 : -1);
     const oy = Math.abs(dy) < 40 ? 0 : (dy > 0 ? 1 : -1);
@@ -434,15 +545,17 @@
   let tick = 0, blinkUntil = 0;
   setInterval(() => {
     tick++;
-    if (tick % 46 === 0) blinkUntil = tick + 2;       // calm blink ~every 5.7s
+    if (tick % 46 === 0) blinkUntil = tick + 2;
     const blink = tick < blinkUntil;
     let o = eyeOffset(heroCv);
     drawPanda(heroCtx, FULL, o.ox, o.oy, blink);
     o = eyeOffset(navCv);
     drawPanda(navCtx, FULL, o.ox, o.oy, blink);
+    o = eyeOffset(appAv);
+    drawPanda(appCtx, FULL, o.ox, o.oy, blink);
     if (peekCv.getBoundingClientRect().top < innerHeight) {
       o = eyeOffset(peekCv);
-      drawPanda(peekCtx, HEAD, o.ox, Math.min(o.oy, 0), blink); // peeking: never look down
+      drawPanda(peekCtx, HEAD, o.ox, Math.min(o.oy, 0), blink);
     }
   }, 125);
 
@@ -452,7 +565,6 @@
     "Ask me for 10 seed fintech investors.",
     "Your draft sounds like ChatGPT. Fixable.",
     "I cite my sources. Every time.",
-    "sent from my iphone",
     "Currently eating bamboo. Still on the clock.",
     "One command and I'm on your desktop."
   ];
@@ -460,7 +572,7 @@
   const bubbleText = document.getElementById('bubbleText');
   let qi = 0, typing = false;
 
-  function typeQuip(text, done) {
+  function typeQuip(text) {
     typing = true; bubble.classList.add('show'); bubbleText.textContent = '';
     let i = 0;
     const iv = setInterval(() => {
@@ -469,25 +581,116 @@
         clearInterval(iv);
         setTimeout(() => {
           bubble.classList.remove('show');
-          setTimeout(() => { typing = false; done && done(); }, 300);
+          setTimeout(() => { typing = false; }, 300);
         }, 2600);
       }
     }, 34);
   }
   function nextQuip() {
     if (typing) return;
-    typeQuip(QUIPS[qi % QUIPS.length], () => {});
+    typeQuip(QUIPS[qi % QUIPS.length]);
     qi++;
   }
   setTimeout(nextQuip, 1400);
   setInterval(() => { if (!typing) nextQuip(); }, 9000);
 
-  // click → hop + immediate quip
   const stage = document.getElementById('stage');
   heroCv.addEventListener('click', () => {
     stage.classList.remove('hop'); void stage.offsetWidth; stage.classList.add('hop');
     if (!typing) nextQuip();
   });
+
+  // ================= app replay =================
+  const appLog = document.getElementById('appLog');
+  const tabR = document.getElementById('tabR');
+  const tabW = document.getElementById('tabW');
+  const appInput = document.getElementById('appInput');
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  function bubbleEl(cls, text) {
+    const el = document.createElement('div');
+    el.className = 'm ' + cls;
+    if (text != null) el.textContent = text;
+    appLog.appendChild(el);
+    return el;
+  }
+  function dotsEl() {
+    const el = document.createElement('div');
+    el.className = 'm p dots';
+    el.innerHTML = '<span></span><span></span><span></span>';
+    appLog.appendChild(el);
+    return el;
+  }
+  function actsEl(labels) {
+    const el = document.createElement('div');
+    el.className = 'acts';
+    el.innerHTML = labels.map(l => '<span>' + l + '</span>').join('');
+    appLog.appendChild(el);
+    return el;
+  }
+  async function typeInto(el, text, ms) {
+    for (let i = 1; i <= text.length; i++) {
+      el.textContent = text.slice(0, i);
+      await sleep(ms);
+    }
+  }
+  async function userSays(text) {
+    appInput.textContent = '';
+    await typeInto(appInput, text, 26);
+    await sleep(320);
+    appInput.textContent = 'Message Mr. Panda…';
+    const el = bubbleEl('u', '');
+    el.textContent = text;
+    await sleep(420);
+  }
+  async function pandaSays(text, srcLine, acts) {
+    const d = dotsEl();
+    await sleep(1100);
+    d.remove();
+    const el = bubbleEl('p', '');
+    await typeInto(el, text, 7);
+    if (srcLine) {
+      const s = document.createElement('div');
+      s.className = 'src';
+      el.appendChild(document.createElement('br'));
+      s.textContent = srcLine;
+      el.appendChild(s);
+    }
+    if (acts) actsEl(acts);
+  }
+  function setTab(write) {
+    tabR.classList.toggle('on', !write);
+    tabW.classList.toggle('on', write);
+  }
+
+  async function replayLoop() {
+    while (true) {
+      appLog.innerHTML = ''; setTab(false);
+      await sleep(900);
+      await userSays('find me 3 seed-stage fintech investors in India');
+      await pandaSays(
+        'Three worth your time:\n\n1. Blume Ventures — early-stage, strong fintech thesis (Mumbai)\n2. Kae Capital — pre-seed & seed, fintech + SaaS (Mumbai)\n3. India Quotient — seed, consumer fintech bets (Bengaluru)',
+        '🔎 Sources: blume.vc · kae.capital · indiaquotient.in',
+        ['Copy', 'Save']
+      );
+      await sleep(2400);
+
+      appLog.innerHTML = ''; setTab(true);
+      await sleep(700);
+      await userSays('write a cold intro email to the Blume team about NimbusPay');
+      await pandaSays(
+        'Subject: NimbusPay — UPI payouts, 40% m/m growth\n\nHi team,\n\nI\'m building NimbusPay: UPI-first payouts for marketplaces. Live with 90+ sellers, growing 40% month over month.\n\nGiven Blume\'s fintech thesis, I\'d love 20 minutes to show you what we\'re seeing.\n\nBest,\nRaj',
+        null,
+        ['Copy', 'Paste into box']
+      );
+      await sleep(3200);
+    }
+  }
+  // start the loop when the window scrolls into view
+  const replayIO = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) { replayIO.disconnect(); replayLoop(); }
+  }, { threshold: 0.25 });
+  replayIO.observe(document.querySelector('.app-window'));
 
   // ================= humanize demo =================
   const VOICES = {
@@ -501,15 +704,15 @@
     },
     human: {
       label: "humanized — human",
-      text: "Hey — been following what you're building and it clicked with something we're working on. Any chance you're up for a quick call this week? Happy to work around your schedule."
+      text: "Hey, been following what you're building and it clicked with something we're working on. Any chance you're up for a quick call this week? Happy to work around your schedule."
     },
     ceo: {
       label: "humanized — ceo",
-      text: "saw what you're building. we should talk.\n\n15 min this week?\n\nsent from my iphone"
+      text: "Saw what you're building. We should talk.\n\nDo you have 15 minutes this week?"
     },
     founder: {
       label: "humanized — founder",
-      text: "Building something you'll want to see. It solves the exact problem your portfolio keeps hitting. 15 minutes, any day this week — I'll bring the numbers."
+      text: "Building something you'll want to see. It solves the exact problem your portfolio keeps hitting. 15 minutes, any day this week. I'll bring the numbers."
     }
   };
   const demoText = document.getElementById('demoText');
@@ -572,10 +775,11 @@
   // ================= copy =================
   const CMD = 'curl -fsSL https://raw.githubusercontent.com/ShivrajPatilHQ/Mr.Panda/main/install.sh | bash';
   document.querySelectorAll('[data-copy]').forEach(b => {
+    const orig = b.textContent;
     b.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(CMD); b.textContent = 'Copied'; }
+      try { await navigator.clipboard.writeText(CMD); b.textContent = 'Copied ✓'; }
       catch (e) { b.textContent = 'Select it'; }
-      setTimeout(() => { b.textContent = 'Copy'; }, 1500);
+      setTimeout(() => { b.textContent = orig; }, 1500);
     });
   });
 </script>
