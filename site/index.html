@@ -228,7 +228,7 @@
 
   /* ============ pricing ============ */
   .pricing { padding: 10px 0 110px; position: relative; z-index: 1; }
-  .pgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; max-width: 780px; }
+  .pgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
   .plan {
     border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
     padding: 34px 30px; position: relative;
@@ -240,6 +240,8 @@
   }
   .plan .pname { font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
   .plan .pprice { font-size: 42px; font-weight: 700; letter-spacing: -0.03em; margin: 10px 0 2px; }
+  .plan .pprice.ptext { font-size: 30px; padding-top: 9px; }
+  .plan .pbtn.soon { opacity: .55; cursor: default; }
   .plan .pper { font-size: 13px; color: var(--faint); margin-bottom: 22px; }
   .plan ul { list-style: none; display: flex; flex-direction: column; gap: 11px; margin-bottom: 28px; }
   .plan li { font-size: 14px; color: var(--muted); padding-left: 24px; position: relative; }
@@ -313,9 +315,9 @@
     </div>
 
     <h1>An assistant that <em>lives</em><br><span class="quiet">on your desktop.</span></h1>
-    <p class="lede">Mr. Panda roams your screen. Click him and he researches investors with
-    <strong>live web search</strong>, writes <strong>ready-to-send emails</strong>, and rewrites
-    AI-sounding text so it reads human — in any app.</p>
+    <p class="lede">Finding the right investors takes a week. Writing emails they'll actually
+    answer takes another. Mr. Panda does both in minutes — <strong>researched with live
+    sources</strong>, <strong>drafted ready to send</strong>, pasted into any app on your Mac.</p>
 
     <div class="install">
       <div class="cmd">
@@ -420,7 +422,7 @@
       <div class="f"><span class="tag">private</span>
         <h3>No account. Ever.</h3>
         <p>No sign-up, no tracking dashboard, no email capture. A free hosted tier out of the box,
-        or bring your own Gemini key — stored only on your Mac.</p></div>
+        or bring your own API key — works best with Claude, and it never leaves your Mac.</p></div>
     </div>
   </section>
 </div>
@@ -432,8 +434,7 @@
       <h2>Start free. Stay free if you like.</h2>
     </div>
     <div class="pgrid">
-      <div class="plan hot">
-        <span class="badge">Start here</span>
+      <div class="plan">
         <div class="pname">Free</div>
         <div class="pprice">$0</div>
         <div class="pper">forever</div>
@@ -445,20 +446,32 @@
         </ul>
         <button class="pbtn" data-copy>Copy install command</button>
       </div>
-      <div class="plan">
-        <div class="pname">Bring your own key</div>
-        <div class="pprice">$0</div>
-        <div class="pper">unlimited · your Gemini key</div>
+      <div class="plan hot">
+        <span class="badge">Coming soon</span>
+        <div class="pname">Pro</div>
+        <div class="pprice">₹449</div>
+        <div class="pper">per month · hosted</div>
         <ul>
           <li><strong>Unlimited</strong> messages</li>
-          <li>Your key, stored only on your Mac</li>
-          <li>Sent only to Google, never to us</li>
-          <li>Switch anytime in Settings</li>
+          <li>No API key needed — we host it</li>
+          <li>Everything in Free</li>
+          <li>Cancel anytime</li>
         </ul>
-        <a class="pbtn" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini key ↗</a>
+        <button class="pbtn soon" disabled>Launching soon</button>
+      </div>
+      <div class="plan">
+        <div class="pname">Bring your own key</div>
+        <div class="pprice ptext">Your key</div>
+        <div class="pper">unlimited · pay your provider</div>
+        <ul>
+          <li><strong>Unlimited</strong> messages</li>
+          <li>Works best with <strong>Claude</strong></li>
+          <li>Any provider key welcome</li>
+          <li>Stored only on your Mac</li>
+        </ul>
+        <a class="pbtn" href="https://console.anthropic.com" target="_blank" rel="noopener">Get an Anthropic key ↗</a>
       </div>
     </div>
-    <p class="psoon"><strong>Pro</strong> — unlimited hosted, no key needed — coming soon at ₹449/mo.</p>
   </section>
 </div>
 
@@ -475,7 +488,7 @@
   </section>
 
   <footer>
-    <span>© 2026 Mr. Panda · built by Raj</span>
+    <span>© 2026 Mr. Panda · built by Shivraj</span>
     <a href="https://github.com/ShivrajPatilHQ/Mr.Panda" target="_blank" rel="noopener">Open source on GitHub ↗</a>
   </footer>
 </div>
@@ -679,7 +692,7 @@
       await sleep(700);
       await userSays('write a cold intro email to the Blume team about NimbusPay');
       await pandaSays(
-        'Subject: NimbusPay — UPI payouts, 40% m/m growth\n\nHi team,\n\nI\'m building NimbusPay: UPI-first payouts for marketplaces. Live with 90+ sellers, growing 40% month over month.\n\nGiven Blume\'s fintech thesis, I\'d love 20 minutes to show you what we\'re seeing.\n\nBest,\nRaj',
+        'Subject: NimbusPay — UPI payouts, 40% m/m growth\n\nHi team,\n\nI\'m building NimbusPay: UPI-first payouts for marketplaces. Live with 90+ sellers, growing 40% month over month.\n\nGiven Blume\'s fintech thesis, I\'d love 20 minutes to show you what we\'re seeing.\n\nBest,\nShivraj',
         null,
         ['Copy', 'Paste into box']
       );

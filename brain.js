@@ -18,9 +18,11 @@ let cfgPath = null;
 let cfg = {
   mode: 'hosted',                  // 'hosted' | 'byok'
   deviceId: '',
-  provider: 'gemini',
+  provider: 'anthropic',           // BYOK provider: 'anthropic' (recommended) | 'gemini'
   geminiKey: '',
-  geminiModel: 'gemini-2.5-flash', // BYOK only — hosted mode uses the server's fixed model
+  geminiModel: 'gemini-2.5-flash',
+  anthropicKey: '',
+  anthropicModel: 'claude-opus-4-8',
   webSearch: true
 };
 
@@ -41,13 +43,16 @@ async function init(userDataDir) {
   registerDevice().catch(() => {}); // warm the device record; fine if offline at boot
 }
 
-// Never expose the raw key back to the UI — only whether one is set.
+// Never expose the raw keys back to the UI — only whether one is set.
 function getConfig() {
+  const byokModel = cfg.provider === 'anthropic' ? cfg.anthropicModel : cfg.geminiModel;
+  const byokKey = cfg.provider === 'anthropic' ? cfg.anthropicKey : cfg.geminiKey;
   return {
     mode: cfg.mode,
     provider: cfg.provider,
-    geminiModel: cfg.mode === 'hosted' ? 'gemini-2.5-flash (hosted)' : cfg.geminiModel,
-    hasKey: !!cfg.geminiKey,
+    byokModel,
+    geminiModel: cfg.mode === 'hosted' ? 'hosted' : byokModel, // legacy field name kept for the UI
+    hasKey: !!byokKey,
     webSearch: cfg.webSearch !== false
   };
 }
@@ -55,9 +60,11 @@ function getConfig() {
 function saveConfig(patch) {
   if (patch && typeof patch === 'object') {
     if (patch.mode === 'hosted' || patch.mode === 'byok') cfg.mode = patch.mode;
+    if (patch.provider === 'anthropic' || patch.provider === 'gemini') cfg.provider = patch.provider;
     if (typeof patch.geminiKey === 'string' && patch.geminiKey.trim()) cfg.geminiKey = patch.geminiKey.trim();
     if (typeof patch.geminiModel === 'string' && patch.geminiModel.trim()) cfg.geminiModel = patch.geminiModel.trim();
-    if (typeof patch.provider === 'string') cfg.provider = patch.provider;
+    if (typeof patch.anthropicKey === 'string' && patch.anthropicKey.trim()) cfg.anthropicKey = patch.anthropicKey.trim();
+    if (typeof patch.anthropicModel === 'string' && patch.anthropicModel.trim()) cfg.anthropicModel = patch.anthropicModel.trim();
     if (typeof patch.webSearch === 'boolean') cfg.webSearch = patch.webSearch;
   }
   persist();
@@ -117,7 +124,7 @@ async function registerDevice() {
 
 function friendlyHostedError(code) {
   const map = {
-    LIMIT: "You've used today's free messages. Add your own Gemini key in Settings for unlimited use.",
+    LIMIT: "You've used today's free messages. Add your own API key in Settings for unlimited use.",
     GLOBAL_BUSY: 'The free service is at capacity right now — try again shortly, or use your own key in Settings.',
     DB_DOWN: 'The hosted service is warming up — try again in a moment.',
     RATE: 'Slow down a little — too many requests at once.',
@@ -148,15 +155,14 @@ async function hostedRequest(kind, extra) {
   return data;
 }
 
-// ---- public API (branches hosted vs BYOK) ----
+// ---- public API (branches hosted vs BYOK, and BYOK by provider) ----
 async function ask(history, attachments, mode) {
   if (cfg.mode === 'hosted') {
     const data = await hostedRequest('chat', { history, attachments, mode, webSearch: cfg.webSearch !== false });
     return data.text;
   }
-  if (cfg.provider === 'gemini') return askGeminiDirect(history, attachments, mode);
-  if (cfg.provider === 'anthropic') { const e = new Error('Claude support is planned for later.'); e.code = 'NO_PROVIDER'; throw e; }
-  const e = new Error('No brain provider configured.'); e.code = 'NO_PROVIDER'; throw e;
+  if (cfg.provider === 'anthropic') return askClaudeDirect(history, attachments, mode);
+  return askGeminiDirect(history, attachments, mode);
 }
 
 async function humanize(text, mode, opts) {
@@ -164,6 +170,7 @@ async function humanize(text, mode, opts) {
     const data = await hostedRequest('humanize', { text, mode, imperfect: !!(opts && opts.imperfect), custom: opts && opts.custom });
     return data.text;
   }
+  if (cfg.provider === 'anthropic') return humanizeClaude(text, mode, opts);
   return humanizeDirect(text, mode, opts);
 }
 
@@ -172,13 +179,14 @@ async function extractInvestors(text) {
     const data = await hostedRequest('extract', { text });
     return data.items || [];
   }
+  if (cfg.provider === 'anthropic') return extractClaudeContacts(text);
   return extractInvestorsDirect(text);
 }
 
 // listModels only makes sense for BYOK — hosted mode has one fixed model.
 async function listModels() {
   if (cfg.mode === 'hosted') return [];
-  if (cfg.provider !== 'gemini') return [];
+  if (cfg.provider === 'anthropic') return listClaudeModels();
   if (!cfg.geminiKey) { const e = new Error('No API key set.'); e.code = 'NO_KEY'; throw e; }
   const url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(cfg.geminiKey);
   const res = await fetch(url);
@@ -343,6 +351,160 @@ async function humanizeDirect(text, mode, opts) {
   out = out.trim().replace(/^["']|["']$/g, '');
   if (!out) { const e = new Error('Empty rewrite.'); e.code = 'EMPTY'; throw e; }
   return out;
+}
+
+// ---- direct-to-Anthropic path (BYOK — recommended provider) ----
+function claudeClient() {
+  if (!cfg.anthropicKey) { const e = new Error('No API key set.'); e.code = 'NO_KEY'; throw e; }
+  const Anthropic = require('@anthropic-ai/sdk');
+  return new Anthropic({ apiKey: cfg.anthropicKey, timeout: 120000, maxRetries: 1 });
+}
+
+function wrapClaudeError(err) {
+  if (err && err.code) return err; // already ours (NO_KEY etc.)
+  const e = new Error(
+    err && err.status === 401 ? 'That Anthropic key was rejected — check it in Settings.'
+      : 'Anthropic API error: ' + String((err && err.message) || err).slice(0, 140)
+  );
+  e.code = 'API_ERROR';
+  return e;
+}
+
+async function attachmentsToClaudeBlocks(attachments) {
+  const blocks = [];
+  for (const a of (attachments || [])) {
+    const mime = a.mime || '';
+    try {
+      if (mime.startsWith('image/')) {
+        blocks.push({ type: 'image', source: { type: 'base64', media_type: mime, data: a.dataBase64 } });
+      } else if (mime === 'application/pdf') {
+        blocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: a.dataBase64 } });
+      } else if (mime.indexOf('wordprocessingml.document') !== -1 || /\.docx$/i.test(a.name || '')) {
+        const mammoth = require('mammoth');
+        const out = await mammoth.extractRawText({ buffer: Buffer.from(a.dataBase64, 'base64') });
+        blocks.push({ type: 'text', text: 'Contents of ' + (a.name || 'document.docx') + ':\n' + (out.value || '(empty)') });
+      } else {
+        const txt = Buffer.from(a.dataBase64, 'base64').toString('utf8');
+        blocks.push({ type: 'text', text: 'Contents of ' + (a.name || 'file') + ':\n' + txt.slice(0, 100000) });
+      }
+    } catch (e) {
+      blocks.push({ type: 'text', text: '(Could not read ' + (a.name || 'a file') + ': ' + (e.message || e) + ')' });
+    }
+  }
+  return blocks;
+}
+
+function claudeTextOf(resp) {
+  return resp.content.filter(b => b.type === 'text').map(b => b.text).join('');
+}
+
+async function askClaudeDirect(history, attachments, mode) {
+  const client = claudeClient();
+  const model = cfg.anthropicModel || 'claude-opus-4-8';
+
+  const messages = history.map(m => ({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: [{ type: 'text', text: m.text }]
+  }));
+  const fileBlocks = await attachmentsToClaudeBlocks(attachments);
+  if (fileBlocks.length && messages.length) messages[messages.length - 1].content.push(...fileBlocks);
+
+  const req = {
+    model,
+    max_tokens: 16000,
+    system: SYSTEM + (MODE_NOTE[mode] || ''),
+    messages
+  };
+  if (cfg.webSearch !== false) {
+    // Haiku-tier models only support the basic web search variant.
+    req.tools = [{ type: /haiku/.test(model) ? 'web_search_20250305' : 'web_search_20260209', name: 'web_search' }];
+  }
+
+  let resp;
+  try { resp = await client.messages.create(req); }
+  catch (err) { throw wrapClaudeError(err); }
+
+  if (resp.stop_reason === 'refusal') { const e = new Error('Claude declined this request.'); e.code = 'REFUSAL'; throw e; }
+  let text = claudeTextOf(resp);
+  if (!text.trim()) { const e = new Error('Empty reply.'); e.code = 'EMPTY'; throw e; }
+  if (resp.stop_reason === 'max_tokens') text += '\n\n…(cut off — say “continue” for the rest)';
+  return text.trim();
+}
+
+async function humanizeClaude(text, mode, opts) {
+  const client = claudeClient();
+  const modeText = (mode === 'custom' && opts && opts.custom) ? ('Voice: ' + opts.custom) : (HUMANIZE_MODES[mode] || HUMANIZE_MODES.human);
+  let sys = 'You rewrite text so it reads as authentically human, not AI-generated. ' +
+    'Return ONLY the rewritten text — no preamble, no quotes, no notes. Keep the original meaning and any key facts. ' +
+    'Remove every em-dash (use a comma, period, or rephrase). ' + modeText;
+  if (opts && opts.imperfect) {
+    sys += ' Add one or two small, natural human imperfections (a casual aside, a slightly informal phrasing, or a minor typo) so it does not read as machine-perfect — subtle, still readable.';
+  }
+
+  let resp;
+  try {
+    resp = await client.messages.create({
+      model: cfg.anthropicModel || 'claude-opus-4-8',
+      max_tokens: 4096,
+      system: sys,
+      messages: [{ role: 'user', content: text }]
+    });
+  } catch (err) { throw wrapClaudeError(err); }
+
+  const out = claudeTextOf(resp).trim().replace(/^["']|["']$/g, '');
+  if (!out) { const e = new Error('Empty rewrite.'); e.code = 'EMPTY'; throw e; }
+  return out;
+}
+
+const CONTACT_FIELDS = ['name', 'firm', 'stage', 'focus', 'checkSize', 'location', 'contact', 'source', 'notes'];
+const CONTACT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['contacts'],
+  properties: {
+    contacts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: CONTACT_FIELDS,
+        properties: Object.fromEntries(CONTACT_FIELDS.map(k => [k, { type: 'string' }]))
+      }
+    }
+  }
+};
+
+async function extractClaudeContacts(text) {
+  const client = claudeClient();
+  const prompt = 'Extract every person, investor, fund, company, or contact mentioned in the TEXT below — ' +
+    'ESPECIALLY anyone with an email, phone, handle, or profile link. ' +
+    'Use "" when a field is unknown — copy details exactly from the TEXT, do NOT invent anything. ' +
+    'Put emails / phones / handles in "contact". If the TEXT names no one, return an empty contacts array.' +
+    '\n\nTEXT:\n' + text;
+
+  let resp;
+  try {
+    resp = await client.messages.create({
+      model: cfg.anthropicModel || 'claude-opus-4-8',
+      max_tokens: 4096,
+      output_config: { format: { type: 'json_schema', schema: CONTACT_SCHEMA } },
+      messages: [{ role: 'user', content: prompt }]
+    });
+  } catch (err) { throw wrapClaudeError(err); }
+
+  try {
+    const data = JSON.parse(claudeTextOf(resp));
+    return Array.isArray(data.contacts) ? data.contacts : [];
+  } catch (_e) { return []; }
+}
+
+async function listClaudeModels() {
+  const client = claudeClient();
+  try {
+    const ids = [];
+    for await (const m of client.models.list()) ids.push(m.id);
+    return ids;
+  } catch (err) { throw wrapClaudeError(err); }
 }
 
 module.exports = { init, getConfig, saveConfig, getStatus, ask, listModels, extractInvestors, humanize };
