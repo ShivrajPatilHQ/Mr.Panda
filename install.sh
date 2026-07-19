@@ -6,29 +6,76 @@ REPO="ShivrajPatilHQ/Mr.Panda"
 APP_NAME="Mr Panda.app"
 
 c() { printf '\033[%sm' "$1"; }
-R="$(c 0)"; B="$(c 1)"; DIM="$(c 2)"; BLUE="$(c '38;5;69')"; RED="$(c '38;5;131')"; GOLD="$(c '38;5;179')"
+R="$(c 0)"; B="$(c 1)"; DIM="$(c 2)"; GOLD="$(c '38;5;179')"; RED="$(c '38;5;131')"
 
 if [ "$(uname -s)" != "Darwin" ]; then
   echo "Mr. Panda is currently macOS-only. Sorry!"
   exit 1
 fi
 
-printf '%s' "$BLUE"
-cat << 'PANDA'
+# ---- pixel panda banner: the exact app-icon sprite, rendered as truecolor
+# half-blocks so the terminal shows the real Mr. Panda, not hand-drawn art. ----
+SPRITE=(
+  "..KKKK............KKKK.."
+  ".KKKKKK..........KKKKKK."
+  ".KKKKWWWWWWWWWWWWWWKKKK."
+  "..KKWWWWWWWWWWWWWWWWKK.."
+  "..WWWWWWWWWWWWWWWWWWWW.."
+  "..WWSSSSSSSSSSSSSSSSWW.."
+  "..WWSXSSSSSSSSSSSSXSWW.."
+  "..WWWSSSSSSSSSSSSSSWWW.."
+  "..WWWWWWWWWWWWWWWWWWWW.."
+  "..WWWWWWWWWNNWWWWWWWWW.."
+  "..WWWWWWWWWWWWWWWWWWWW.."
+  "...WWWWWWWWWWWWWWWWWW..."
+  "....TTTTTHHHHHHTTTTT...."
+  "...TTTTTTTHRRHTTTTTTT..."
+  "...TTTTTTTHRRHTTTTTTT..."
+  "..TTTTTTTTTRRTTTTTTTTT.."
+  "..TTTTTTTTTDRTTTTTTTTT.."
+  "..KKKTTTTTTTTTTTTTTKKK.."
+  "..KKKTTTTTTTTTTTTTTKKK.."
+)
+hexcol() {
+  case "$1" in
+    K) echo "23;23;28" ;;   N) echo "23;23;28" ;;
+    W) echo "242;239;228" ;;
+    S) echo "13;16;21" ;;   X) echo "159;216;255" ;;
+    T) echo "38;38;46" ;;   H) echo "246;244;236" ;;
+    R) echo "192;57;43" ;;  D) echo "232;199;102" ;;
+  esac
+}
+draw_panda() {
+  local rows=${#SPRITE[@]}
+  local i=0
+  while [ $i -lt $rows ]; do
+    local top="${SPRITE[$i]}"
+    local bot="${SPRITE[$((i+1))]:-$top}"
+    local line=""
+    local len=${#top}
+    local j=0
+    while [ $j -lt $len ]; do
+      local tc="${top:$j:1}"
+      local bc="${bot:$j:1}"
+      if [ "$tc" = "." ] && [ "$bc" = "." ]; then
+        line+=" "
+      elif [ "$tc" != "." ] && [ "$bc" != "." ]; then
+        line+="$(c "38;2;$(hexcol "$tc")")$(c "48;2;$(hexcol "$bc")")▀$R"
+      elif [ "$tc" != "." ]; then
+        line+="$(c "38;2;$(hexcol "$tc")")▀$R"
+      else
+        line+="$(c "38;2;$(hexcol "$bc")")▄$R"
+      fi
+      j=$((j+1))
+    done
+    echo "  $line"
+    i=$((i+2))
+  done
+}
 
-           .-""""""-.
-        .-"  ..  ..  "-.
-       /    (()  ()      \
-      |     '.......'    |
-       \    .---------.  /
-        '--'  |||  |||'--'
-           .--'|||||'--.
-          /    '''''    \
-         |  [Mr. Panda]  |
-          \_____________/
-PANDA
-printf '%s\n' "$R"
-
+echo ""
+draw_panda
+echo ""
 echo "${B}Mr. Panda${R}${DIM} — your desktop research & writing sidekick${R}"
 echo ""
 
