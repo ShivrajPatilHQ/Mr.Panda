@@ -1,5 +1,26 @@
 # Mr. Panda — Changelog
 
+## v1.2 — 2026-07-19
+
+**Hosted backend — zero-setup free tier.** The big unlock: install and chat, no API key needed.
+
+- New `server/` — Bun + Hono backend deployed on the user's VPS (Coolify), talking to
+  Mongo Atlas. Holds a shared Gemini key and meters 5 free uses/day per device, with a
+  global daily spend cap so costs can never run away.
+- App now defaults to **Hosted** mode: generates a device ID on first launch, registers
+  with the server, and routes chat/humanize/extract through `/v1/generate`.
+- **Free / My own key** switch in Settings — BYOK stays available for power users
+  (unchanged behavior), hosted is the new default for everyone else.
+- Live usage status in the chat header ("N/5 free today"), with friendly messaging when
+  the daily limit or global cap is hit (nudges to Settings, doesn't just error out).
+- Fixed a retired-model bug (`gemini-2.0-flash` → `gemini-2.5-flash`, stable non-preview)
+  found via live end-to-end testing against the deployed server.
+- Hardened secrets handling after a real incident: Coolify was baking env vars into
+  Docker build ARGs (visible in build logs) — fixed by marking them runtime-only; the
+  exposed key was rotated.
+- Verified end-to-end against the live server: registration, metering, chat, humanize,
+  and extract all confirmed working before packaging.
+
 ## v1.1 — 2026-07-18
 
 - **Pixel-art Mr. Panda** — 24×24 sprite ("The Founder" palette) replaces the vector
