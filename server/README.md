@@ -9,9 +9,28 @@ Deploys as an **isolated Coolify app** — it does not touch anything else on th
 |---|---|---|
 | GET  | `/health` | liveness (returns `db: true/false`) |
 | POST | `/v1/register` | first-run: `{ deviceId? }` → `{ deviceId, plan, limit }` |
-| GET  | `/v1/me?device=…` | `{ plan, limit, usedToday, remaining }` for the status line |
+| GET  | `/v1/me?device=…` | `{ plan, limit, usedToday, remaining, email }` for the status line |
 | POST | `/v1/generate` | metered proxy: `{ deviceId, kind, ... }` → AI reply |
-| GET  | `/v1/admin/stats?token=…` | your dashboard numbers (devices, pro, usage today) |
+| POST | `/v1/account/request-code` | `{ email }` → emails a 6-digit restore code (logs it in dev) |
+| POST | `/v1/account/verify-code` | `{ email, code, deviceId }` → links device to account, returns plan |
+| GET  | `/v1/admin/stats?token=…` | dashboard counts (devices, accounts, pro, usage today) |
+| GET  | `/v1/admin/accounts?token=…` | list accounts (plan, email, status) — your paid/unpaid view |
+| POST | `/v1/admin/mark-pro?token=…` | `{ email, months? }` → manually grant Pro (test switch before Razorpay) |
+| POST | `/v1/admin/unmark-pro?token=…` | `{ email }` → revert an account to free |
+
+## Accounts (passwordless)
+
+Free tier stays anonymous (device ID, 5/day). An account (keyed by **email**) appears
+only when someone goes Pro. A device links to an account via the restore flow, so Pro
+survives reinstalls and moves to a second Mac. Data model: `accounts`, `devices`
+(with `accountId`), `usage`, `loginCodes` (TTL-expiring codes).
+
+**Restore flow:** app calls `request-code` → user gets a 6-digit code (email, or the
+server log if `RESEND_API_KEY` is unset) → app calls `verify-code` with the code + its
+device ID → the device is linked and picks up the account's plan.
+
+**Testing Pro before Razorpay:** `curl -X POST "$API/v1/admin/mark-pro?token=$ADMIN_TOKEN" -d '{"email":"you@x.com"}'`,
+then restore that email in the app — it should flip to unlimited.
 
 `kind` is `chat` (mode/history/attachments/webSearch), `humanize` (text/mode/imperfect/custom),
 or `extract` (text). `extract` does not count against the daily limit.
