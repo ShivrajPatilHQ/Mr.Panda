@@ -28,10 +28,17 @@
       "!.git/**"
     ],
     "mac": {
-      "target": "dir",
+      "target": ["dmg"],
       "identity": null,
       "icon": "build/icon.png",
       "category": "public.app-category.productivity"
+    },
+    "dmg": {
+      "title": "Mr Panda",
+      "contents": [
+        { "x": 130, "y": 220, "type": "file" },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     }
   }
 }
