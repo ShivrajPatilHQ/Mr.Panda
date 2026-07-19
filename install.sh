@@ -46,37 +46,55 @@ hexcol() {
   esac
 }
 draw_panda() {
+  local scale="$1"
   local rows=${#SPRITE[@]}
   local i=0
   while [ $i -lt $rows ]; do
     local top="${SPRITE[$i]}"
     local bot="${SPRITE[$((i+1))]:-$top}"
-    local line=""
+    local line="" cell=""
     local len=${#top}
-    local j=0
+    local j=0 k=0 v=0
     while [ $j -lt $len ]; do
       local tc="${top:$j:1}"
       local bc="${bot:$j:1}"
       if [ "$tc" = "." ] && [ "$bc" = "." ]; then
-        line+=" "
+        cell=" "
       elif [ "$tc" != "." ] && [ "$bc" != "." ]; then
-        line+="$(c "38;2;$(hexcol "$tc")")$(c "48;2;$(hexcol "$bc")")▀$R"
+        cell="$(c "38;2;$(hexcol "$tc")")$(c "48;2;$(hexcol "$bc")")▀$R"
       elif [ "$tc" != "." ]; then
-        line+="$(c "38;2;$(hexcol "$tc")")▀$R"
+        cell="$(c "38;2;$(hexcol "$tc")")▀$R"
       else
-        line+="$(c "38;2;$(hexcol "$bc")")▄$R"
+        cell="$(c "38;2;$(hexcol "$bc")")▄$R"
       fi
+      k=0; while [ $k -lt "$scale" ]; do line+="$cell"; k=$((k+1)); done
       j=$((j+1))
     done
-    echo "  $line"
+    v=0; while [ $v -lt "$scale" ]; do echo "  $line"; v=$((v+1)); done
     i=$((i+2))
   done
 }
+center_line() {
+  # $1 = plain text (for width math), $2 = colored text (to print), $3 = total width
+  local plain="$1" colored="$2" width="$3"
+  local pad=$(( (width - ${#plain}) / 2 ))
+  [ $pad -lt 0 ] && pad=0
+  printf '%*s%s\n' "$pad" '' "$colored"
+}
+
+COLS="$(tput cols 2>/dev/null || echo 80)"
+SPRITE_W=${#SPRITE[0]}
+SCALE=$(( COLS / SPRITE_W ))
+[ "$SCALE" -lt 2 ] && SCALE=2
+[ "$SCALE" -gt 4 ] && SCALE=4
+BANNER_W=$(( SPRITE_W * SCALE + 2 ))
 
 echo ""
-draw_panda
+draw_panda "$SCALE"
 echo ""
-echo "${B}Mr. Panda${R}${DIM} — your desktop research & writing sidekick${R}"
+center_line "Mr.Panda" "${B}$(c '38;2;231;76;60')Mr.Panda${R}" "$BANNER_W"
+echo ""
+echo "${DIM}your desktop research & writing sidekick${R}"
 echo ""
 
 ARCH="$(uname -m)"
