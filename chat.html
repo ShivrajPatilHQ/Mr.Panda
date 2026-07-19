@@ -148,14 +148,19 @@
         <div id="hostedInfo" class="hint"></div>
 
         <div id="byokFields" style="display:none">
-          <label class="f">Gemini API key</label>
+          <label class="f">Provider</label>
+          <select id="provSel" class="in">
+            <option value="anthropic">Anthropic · Claude (recommended)</option>
+            <option value="gemini">Google · Gemini</option>
+          </select>
+          <label class="f" id="keyLabel">Anthropic API key</label>
           <input id="keyInput" class="in" type="password" placeholder="paste your key" autocomplete="off" />
           <label class="f">Model</label>
           <div class="modelrow">
             <select id="modelSel" class="in"><option>loading…</option></select>
             <button class="pill" id="listModels">refresh</button>
           </div>
-          <div class="hint">Free key at aistudio.google.com/apikey. Saved only on this Mac, sent only to Google.</div>
+          <div class="hint" id="keyHint">Get a key at console.anthropic.com. Saved only on this Mac, sent only to Anthropic.</div>
         </div>
 
         <div class="toggle"><span>Search the live web</span><div class="switch" id="webSwitch"><div class="knob"></div></div></div>
@@ -313,8 +318,19 @@
   // ---- config / settings ----
   const keyInput = $('keyInput'), modelSel = $('modelSel'), skeyStatus = $('skeyStatus'),
         webSwitch = $('webSwitch'), hostedInfo = $('hostedInfo'), byokFields = $('byokFields'),
-        modeHostedBtn = $('modeHostedBtn'), modeByokBtn = $('modeByokBtn');
+        modeHostedBtn = $('modeHostedBtn'), modeByokBtn = $('modeByokBtn'),
+        provSel = $('provSel'), keyLabel = $('keyLabel'), keyHint = $('keyHint');
   let hasKey = false, webOn = true, mode = 'hosted';
+  function applyProviderUI(p){
+    provSel.value = p;
+    if(p === 'anthropic'){
+      keyLabel.textContent = 'Anthropic API key';
+      keyHint.textContent = 'Get a key at console.anthropic.com. Saved only on this Mac, sent only to Anthropic.';
+    } else {
+      keyLabel.textContent = 'Gemini API key';
+      keyHint.textContent = 'Free key at aistudio.google.com/apikey. Saved only on this Mac, sent only to Google.';
+    }
+  }
   function setModelOptions(list, current){
     const set = new Set(list); if(current) set.add(current);
     modelSel.innerHTML = '';
@@ -333,8 +349,10 @@
     const c = await api.getConfig();
     hasKey = !!c.hasKey; webOn = c.webSearch !== false;
     setModeUI(c.mode || 'hosted');
+    applyProviderUI(c.provider === 'gemini' ? 'gemini' : 'anthropic');
     webSwitch.classList.toggle('on', webOn);
-    setModelOptions(c.geminiModel?[c.geminiModel]:[], c.geminiModel);
+    const m = c.byokModel || '';
+    setModelOptions(m ? [m] : [], m);
     skeyStatus.textContent = (mode === 'byok' && hasKey) ? '✓ key saved' : ''; skeyStatus.style.color = '#2a7';
     await refreshStatus();
   }
@@ -359,10 +377,25 @@
   modeHostedBtn.addEventListener('click', async () => { setModeUI('hosted'); await api.saveConfig({ mode: 'hosted' }); await refreshStatus(); });
   modeByokBtn.addEventListener('click', async () => { setModeUI('byok'); await api.saveConfig({ mode: 'byok' }); await refreshStatus(); });
   webSwitch.addEventListener('click', () => { webOn = !webOn; webSwitch.classList.toggle('on', webOn); api.saveConfig && api.saveConfig({ webSearch: webOn }); });
-  modelSel.addEventListener('change', () => { api.saveConfig && api.saveConfig({ geminiModel: modelSel.value }); refreshConfig(); });
+  function keyPatch(){
+    const patch = {};
+    const k = keyInput.value.trim();
+    if(k){ patch.provider = provSel.value; if(provSel.value === 'anthropic') patch.anthropicKey = k; else patch.geminiKey = k; }
+    return patch;
+  }
+  provSel.addEventListener('change', async () => {
+    applyProviderUI(provSel.value);
+    if(api.saveConfig) await api.saveConfig({ provider: provSel.value });
+    await refreshConfig();
+  });
+  modelSel.addEventListener('change', () => {
+    if(!api.saveConfig || !modelSel.value || modelSel.value.startsWith('(')) return;
+    api.saveConfig(provSel.value === 'anthropic' ? { anthropicModel: modelSel.value } : { geminiModel: modelSel.value });
+  });
   $('listModels').addEventListener('click', async () => {
     if(!api.listModels) return;
-    if(keyInput.value.trim() && api.saveConfig){ await api.saveConfig({geminiKey:keyInput.value.trim()}); keyInput.value=''; await refreshConfig(); }
+    const patch = keyPatch();
+    if(Object.keys(patch).length && api.saveConfig){ await api.saveConfig(patch); keyInput.value=''; await refreshConfig(); }
     skeyStatus.textContent = 'loading models…';
     const r = await api.listModels();
     if(r && r.ok && r.models.length){ setModelOptions(r.models, modelSel.value); skeyStatus.textContent = r.models.length+' models'; }
@@ -370,9 +403,10 @@
     else { skeyStatus.textContent = (r&&r.error) ? r.error.slice(0,50) : 'failed'; }
   });
   $('saveKey').addEventListener('click', async () => {
-    const patch = { webSearch: webOn };
-    if(keyInput.value.trim()) patch.geminiKey = keyInput.value.trim();
-    if(modelSel.value) patch.geminiModel = modelSel.value;
+    const patch = Object.assign({ webSearch: webOn }, keyPatch());
+    if(modelSel.value && !modelSel.value.startsWith('(')){
+      if(provSel.value === 'anthropic') patch.anthropicModel = modelSel.value; else patch.geminiModel = modelSel.value;
+    }
     if(api.saveConfig) await api.saveConfig(patch);
     keyInput.value=''; await refreshConfig(); closeSheets();
   });
@@ -414,7 +448,7 @@
     if(r && r.ok){ humanStatus.textContent = '✓ humanized & pasted back'; }
     else if(r && r.code==='NO_SELECTION'){ humanStatus.textContent = 'select some text first, then pick a voice'; }
     else if(r && r.code==='NO_PERMISSION'){ humanStatus.textContent = 'needs Accessibility — turn on “Mr Panda”, then retry'; if(api.openAccessibility) api.openAccessibility(); }
-    else if(r && r.code==='NO_KEY'){ humanStatus.textContent = 'set your Gemini key first'; }
+    else if(r && r.code==='NO_KEY'){ humanStatus.textContent = 'set your API key first'; }
     else { humanStatus.textContent = (r&&r.error) ? r.error.slice(0,60) : 'failed'; }
   }
   document.querySelectorAll('.voice').forEach(el => el.addEventListener('click', () => {
@@ -458,7 +492,7 @@
     const r = await api.ask(text, sending, tab);
     t.remove();
     if(r && r.ok){ pushMsg('panda', r.text); }
-    else if(r && r.code==='NO_KEY'){ pushMsg('err','I need a Gemini key — open Settings and paste one.'); openSheet('settingsSheet'); }
+    else if(r && r.code==='NO_KEY'){ pushMsg('err','I need an API key — open Settings and paste one.'); openSheet('settingsSheet'); }
     else if(r && (r.code==='LIMIT' || r.code==='GLOBAL_BUSY')){ pushMsg('err', r.error); openSheet('settingsSheet'); }
     else if(r && r.code==='OFFLINE'){ pushMsg('err', r.error); }
     else { pushMsg('err', "That didn't work: " + ((r&&r.error)||'unknown error')); }
