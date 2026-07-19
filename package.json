@@ -28,7 +28,7 @@
       "!.git/**"
     ],
     "mac": {
-      "target": ["dmg"],
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
       "identity": null,
       "icon": "build/icon.png",
       "category": "public.app-category.productivity"
