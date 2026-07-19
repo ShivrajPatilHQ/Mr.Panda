@@ -4,41 +4,52 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mr. Panda — an AI assistant that lives on your desktop</title>
-<meta name="description" content="A small, thoughtful AI assistant for your Mac. Researches investors with live web search, writes ready-to-send emails, and makes AI text read human. One command to install. No API key.">
+<meta name="description" content="A small, sharp AI assistant for your Mac. Researches investors with live web search, writes ready-to-send emails, and makes AI text read human. One command to install. No API key.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #09090b;
     --surface: #101013;
+    --surface2: #141417;
     --border: #1e1e23;
     --border-strong: #2c2c33;
     --text: #f4f4f5;
-    --muted: #8f8f98;
+    --muted: #9092a0;
     --faint: #5c5c66;
     --accent: #e5484d;
+    --green: #46c78a;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
-    background: var(--bg);
-    color: var(--text);
+    background: var(--bg); color: var(--text);
     font-family: 'Inter', -apple-system, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    line-height: 1.6;
+    -webkit-font-smoothing: antialiased; line-height: 1.6;
+    overflow-x: hidden;
   }
   .wrap { max-width: 1040px; margin: 0 auto; padding: 0 32px; }
   a { color: inherit; text-decoration: none; }
+  canvas { image-rendering: pixelated; }
+
+  /* cursor glow */
+  #glow {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: radial-gradient(520px circle at var(--gx, 50%) var(--gy, 30%), rgba(229,72,77,.055), transparent 65%);
+  }
 
   /* nav */
   nav {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 24px 0;
+    position: sticky; top: 0; z-index: 20;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    background: rgba(9,9,11,.72);
+    border-bottom: 1px solid transparent; transition: border-color .2s;
   }
+  nav.scrolled { border-bottom-color: var(--border); }
+  nav .bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; }
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
-  .brand canvas { image-rendering: pixelated; display: block; }
-  .nav-links { display: flex; align-items: center; gap: 28px; font-size: 14px; color: var(--muted); }
+  .nav-links { display: flex; align-items: center; gap: 26px; font-size: 14px; color: var(--muted); }
   .nav-links a:hover { color: var(--text); }
   .nav-links .btn {
     color: var(--text); border: 1px solid var(--border-strong);
@@ -47,28 +58,56 @@
   .nav-links .btn:hover { border-color: #43434c; background: var(--surface); }
 
   /* hero */
-  .hero { padding: 110px 0 90px; text-align: center; }
-  #pandaCv { image-rendering: pixelated; display: block; margin: 0 auto 40px; }
+  .hero { padding: 92px 0 96px; text-align: center; position: relative; z-index: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 500; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 100px;
+    padding: 6px 14px; margin-bottom: 40px; background: rgba(16,16,19,.6);
+  }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+  .stage { position: relative; display: inline-block; margin-bottom: 34px; }
+  #pandaCv { display: block; cursor: pointer; transition: transform .12s; }
+  #pandaCv:active { transform: scale(.96); }
+  .stage.hop #pandaCv { animation: hop .45s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes hop { 0%{transform:translateY(0)} 40%{transform:translateY(-22px)} 100%{transform:translateY(0)} }
+  #bubble {
+    position: absolute; left: calc(100% + 18px); top: 4px; white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--muted);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 9px 13px; opacity: 0; transition: opacity .25s; pointer-events: none;
+  }
+  #bubble::before {
+    content: ""; position: absolute; left: -5px; top: 14px; width: 8px; height: 8px;
+    background: var(--surface); border-left: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    transform: rotate(45deg);
+  }
+  #bubble.show { opacity: 1; }
+  #bubble .caret { display: inline-block; width: 6px; height: 12px; background: var(--accent); vertical-align: -1px; animation: blinkc 1s steps(1) infinite; }
+  @keyframes blinkc { 50% { opacity: 0; } }
+
   h1 {
-    font-size: clamp(38px, 6vw, 62px); font-weight: 700; letter-spacing: -0.035em;
-    line-height: 1.08; max-width: 760px; margin: 0 auto;
+    font-size: clamp(40px, 6.4vw, 66px); font-weight: 700; letter-spacing: -0.038em;
+    line-height: 1.05; max-width: 820px; margin: 0 auto;
   }
   h1 .quiet { color: var(--faint); }
+  h1 em { font-style: italic; color: var(--accent); }
   .lede {
-    font-size: 18px; color: var(--muted); max-width: 560px;
-    margin: 26px auto 0; line-height: 1.7; font-weight: 400;
+    font-size: 18px; color: var(--muted); max-width: 580px;
+    margin: 26px auto 0; line-height: 1.7;
   }
   .lede strong { color: var(--text); font-weight: 500; }
 
   /* install */
-  .install { margin: 52px auto 0; max-width: 620px; }
+  .install { margin: 48px auto 0; max-width: 640px; position: relative; }
   .cmd {
     display: flex; align-items: center; gap: 14px;
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 12px; padding: 16px 18px; text-align: left;
-    transition: border-color .15s;
+    transition: border-color .15s, box-shadow .15s;
   }
-  .cmd:hover { border-color: var(--border-strong); }
+  .cmd:hover { border-color: var(--border-strong); box-shadow: 0 0 40px rgba(229,72,77,.06); }
   .cmd code {
     flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 13.5px;
     color: var(--muted); white-space: nowrap; overflow-x: auto; scrollbar-width: none;
@@ -79,98 +118,147 @@
   .copy {
     flex-shrink: 0; cursor: pointer; border: none; border-radius: 8px;
     background: var(--text); color: var(--bg); font-family: 'Inter', sans-serif;
-    font-size: 13px; font-weight: 600; padding: 9px 16px;
-    transition: opacity .15s;
+    font-size: 13px; font-weight: 600; padding: 9px 16px; transition: opacity .15s, transform .1s;
   }
   .copy:hover { opacity: .85; }
-  .install .meta {
-    margin-top: 16px; font-size: 13px; color: var(--faint);
-  }
-  .install .meta a { color: var(--muted); border-bottom: 1px solid var(--border-strong); padding-bottom: 1px; }
-  .install .meta a:hover { color: var(--text); }
-  .install .meta span { margin: 0 8px; color: var(--border-strong); }
+  .copy:active { transform: scale(.96); }
+  .meta { margin-top: 16px; font-size: 13px; color: var(--faint); text-align: center; }
+  .meta a { color: var(--muted); border-bottom: 1px solid var(--border-strong); padding-bottom: 1px; }
+  .meta a:hover { color: var(--text); }
+  .meta span { margin: 0 8px; color: var(--border-strong); }
 
-  /* divider */
   .rule { border: none; border-top: 1px solid var(--border); }
 
-  /* features */
-  .features { padding: 96px 0; }
+  /* demo */
+  .demo { padding: 100px 0; position: relative; z-index: 1; }
   .kicker {
-    font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    font-size: 12.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
     color: var(--accent); margin-bottom: 14px;
   }
-  .features h2, .cta h2 {
-    font-size: clamp(26px, 4vw, 36px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.2;
+  h2 { font-size: clamp(28px, 4.2vw, 40px); font-weight: 700; letter-spacing: -0.032em; line-height: 1.15; }
+  .demo .head { max-width: 640px; margin-bottom: 46px; }
+  .demo .head p { color: var(--muted); margin-top: 14px; font-size: 16px; }
+  .demo-box {
+    border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
+    overflow: hidden; max-width: 760px;
   }
-  .features .intro { max-width: 620px; margin-bottom: 64px; }
-  .features .intro p { color: var(--muted); margin-top: 14px; font-size: 16px; }
-  .fgrid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 44px 56px;
+  .demo-bar {
+    display: flex; align-items: center; gap: 7px; padding: 13px 16px;
+    border-bottom: 1px solid var(--border); background: var(--surface2);
   }
-  .f h3 { font-size: 15.5px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.01em; }
-  .f h3::before {
-    content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px;
-    background: var(--accent); margin-right: 10px; vertical-align: 1px;
+  .demo-bar .d { width: 11px; height: 11px; border-radius: 50%; background: #2c2c33; }
+  .demo-bar .t { margin-left: 10px; font-size: 12.5px; color: var(--faint); font-family: 'JetBrains Mono', monospace; }
+  .demo-body { padding: 28px; }
+  #demoText {
+    font-family: 'JetBrains Mono', monospace; font-size: 14.5px; line-height: 1.85;
+    color: var(--text); min-height: 132px; white-space: pre-wrap;
   }
-  .f p { font-size: 14.5px; color: var(--muted); line-height: 1.7; }
+  #demoText .caret { display: inline-block; width: 7px; height: 15px; background: var(--accent); vertical-align: -2px; animation: blinkc 1s steps(1) infinite; }
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; padding: 0 28px 26px; }
+  .chip {
+    cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted);
+    border: 1px solid var(--border-strong); background: transparent;
+    padding: 8px 16px; border-radius: 100px; font-family: 'Inter', sans-serif;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .chip:hover:not(:disabled) { color: var(--text); border-color: #43434c; }
+  .chip.on { color: var(--text); border-color: var(--accent); background: rgba(229,72,77,.08); }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .demo-note { margin-top: 18px; font-size: 13px; color: var(--faint); }
 
-  /* quiet band */
-  .band { padding: 88px 0; }
+  /* features */
+  .features { padding: 30px 0 100px; position: relative; z-index: 1; }
+  .features .head { max-width: 620px; margin-bottom: 52px; }
+  .features .head p { color: var(--muted); margin-top: 14px; font-size: 16px; }
+  .fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
+  .f {
+    position: relative; border: 1px solid var(--border); border-radius: 14px;
+    background: var(--surface); padding: 26px 24px; overflow: hidden;
+  }
+  .f::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s;
+    background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), rgba(229,72,77,.07), transparent 60%);
+  }
+  .f:hover::before { opacity: 1; }
+  .f h3 { font-size: 15.5px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .f p { font-size: 14px; color: var(--muted); line-height: 1.7; }
+  .f .tag {
+    display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--accent); margin-bottom: 14px; letter-spacing: .04em;
+  }
+
+  /* band */
+  .band { padding: 10px 0 100px; position: relative; z-index: 1; }
   .band .inner {
     border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
-    padding: 56px 48px; display: flex; align-items: center; justify-content: space-between;
+    padding: 52px 48px; display: flex; align-items: center; justify-content: space-between;
     gap: 40px; flex-wrap: wrap;
   }
-  .band h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 10px; }
-  .band p { color: var(--muted); font-size: 15px; max-width: 460px; }
+  .band h2 { font-size: 26px; margin-bottom: 10px; }
+  .band p { color: var(--muted); font-size: 15px; max-width: 470px; }
   .band p strong { color: var(--text); font-weight: 500; }
   .price { text-align: right; }
-  .price .n { font-size: 40px; font-weight: 700; letter-spacing: -0.03em; }
+  .price .n { font-size: 44px; font-weight: 700; letter-spacing: -0.03em; }
   .price .d { color: var(--faint); font-size: 13.5px; margin-top: 4px; }
 
   /* cta */
-  .cta { padding: 40px 0 120px; text-align: center; }
-  .cta h2 { margin-bottom: 34px; }
+  .cta { padding: 30px 0 130px; text-align: center; position: relative; z-index: 1; }
+  .cta h2 { margin-bottom: 60px; }
   .cta .install { margin-top: 0; }
+  #peekCv { position: absolute; left: 50%; transform: translateX(-50%); top: -57px; z-index: 0; }
 
   footer {
-    border-top: 1px solid var(--border); padding: 36px 0 48px;
+    border-top: 1px solid var(--border); padding: 34px 0 46px;
     display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
-    font-size: 13.5px; color: var(--faint);
+    font-size: 13.5px; color: var(--faint); position: relative; z-index: 1;
   }
   footer a { color: var(--muted); }
   footer a:hover { color: var(--text); }
 
-  @media (max-width: 640px) {
-    .hero { padding: 70px 0 60px; }
+  /* reveal */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s cubic-bezier(.2,.7,.3,1), transform .7s cubic-bezier(.2,.7,.3,1); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  @media (max-width: 680px) {
+    .hero { padding: 64px 0 70px; }
+    #bubble { left: 50%; top: -46px; transform: translateX(-50%); }
+    #bubble::before { left: 50%; top: auto; bottom: -5px; transform: translateX(-50%) rotate(-45deg); }
     .cmd { flex-direction: column; align-items: stretch; }
     .copy { width: 100%; padding: 12px; }
-    .band .inner { padding: 40px 28px; }
+    .band .inner { padding: 38px 26px; }
     .price { text-align: left; }
+    .demo-body, .chips { padding-left: 20px; padding-right: 20px; }
   }
 </style>
 </head>
 <body>
+<div id="glow"></div>
+
+<nav id="nav"><div class="wrap bar">
+  <a class="brand" href="#">
+    <canvas id="navCv" width="24" height="24" style="width:28px;height:28px"></canvas>
+    Mr. Panda
+  </a>
+  <div class="nav-links">
+    <a href="#demo">Demo</a>
+    <a href="#features">Features</a>
+    <a class="btn" href="https://github.com/ShivrajPatilHQ/Mr.Panda" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div></nav>
 
 <div class="wrap">
-  <nav>
-    <a class="brand" href="#">
-      <canvas id="navCv" width="24" height="24" style="width:28px;height:28px"></canvas>
-      Mr. Panda
-    </a>
-    <div class="nav-links">
-      <a href="#features">Features</a>
-      <a class="btn" href="https://github.com/ShivrajPatilHQ/Mr.Panda" target="_blank" rel="noopener">GitHub</a>
-    </div>
-  </nav>
-
   <header class="hero">
-    <canvas id="pandaCv" width="24" height="24" style="width:120px;height:120px"></canvas>
-    <h1>An assistant that lives<br><span class="quiet">on your desktop.</span></h1>
-    <p class="lede">Mr. Panda researches investors with live web search, writes
-    <strong>ready-to-send emails</strong>, and rewrites AI-sounding text so it reads
-    human — in any app on your Mac.</p>
+    <div><span class="pill"><span class="dot"></span> Free on macOS · no API key · open source</span></div>
+
+    <div class="stage" id="stage">
+      <canvas id="pandaCv" width="24" height="24" style="width:168px;height:168px" title="click me"></canvas>
+      <div id="bubble"><span id="bubbleText"></span><span class="caret"></span></div>
+    </div>
+
+    <h1>An assistant that <em>lives</em><br><span class="quiet">on your desktop.</span></h1>
+    <p class="lede">Mr. Panda roams your screen. Click him and he researches investors with
+    <strong>live web search</strong>, writes <strong>ready-to-send emails</strong>, and rewrites
+    AI-sounding text so it reads human — in any app.</p>
 
     <div class="install">
       <div class="cmd">
@@ -178,7 +266,7 @@
         <button class="copy" data-copy>Copy</button>
       </div>
       <p class="meta">
-        macOS · Apple Silicon &amp; Intel <span>·</span> no API key required
+        Apple Silicon &amp; Intel <span>·</span> installs in 15 seconds
         <span>·</span> <a href="https://github.com/ShivrajPatilHQ/Mr.Panda/releases/latest" target="_blank" rel="noopener">download the .dmg</a>
       </p>
     </div>
@@ -188,49 +276,68 @@
 <hr class="rule">
 
 <div class="wrap">
-  <section class="features" id="features">
-    <div class="intro">
-      <div class="kicker">What he does</div>
-      <h2>Small footprint.<br>Serious output.</h2>
-      <p>Click him and his laptop opens — a focused workspace with two desks,
-      built for founders doing outreach.</p>
+  <section class="demo reveal" id="demo">
+    <div class="head">
+      <div class="kicker">Try it right here</div>
+      <h2>Watch him fix a cold email.</h2>
+      <p>This is his Humanize feature — select robotic text in any app, pick a voice,
+      and he rewrites it in place. Pick one:</p>
     </div>
-    <div class="fgrid">
-      <div class="f">
-        <h3>Research with sources</h3>
-        <p>Finds and vets investors, companies, and markets using live Google Search —
-        and cites where every fact came from. He never invents a name, an email, or a number.</p>
+    <div class="demo-box">
+      <div class="demo-bar">
+        <span class="d"></span><span class="d"></span><span class="d"></span>
+        <span class="t" id="demoLabel">draft.txt — sounds like a robot</span>
       </div>
-      <div class="f">
-        <h3>Ready-to-send writing</h3>
-        <p>Ask for a cold email or a LinkedIn message and get a finished draft — subject
-        line, body, sign-off. Copy it, or let him paste it directly into the field you were typing in.</p>
+      <div class="demo-body"><div id="demoText"></div></div>
+      <div class="chips">
+        <button class="chip" data-voice="before">Before</button>
+        <button class="chip" data-voice="subtle">Subtle</button>
+        <button class="chip" data-voice="human">Human</button>
+        <button class="chip" data-voice="ceo">CEO</button>
+        <button class="chip" data-voice="founder">Founder</button>
       </div>
-      <div class="f">
-        <h3>Humanize any text</h3>
-        <p>Select AI-sounding text in any app, pick a voice — Subtle, Human, CEO, Founder,
-        or your own — and he rewrites it and pastes it back over your selection.</p>
-      </div>
-      <div class="f">
-        <h3>Collect &amp; export</h3>
-        <p>Save contacts from research replies into a clean, deduplicated list — names,
-        firms, emails, links — and export everything to CSV in one click.</p>
-      </div>
-      <div class="f">
+    </div>
+    <p class="demo-note">Live in the app, this works on any text you select — Gmail, LinkedIn, Notion, anywhere.</p>
+  </section>
+</div>
+
+<div class="wrap">
+  <section class="features reveal" id="features">
+    <div class="head">
+      <div class="kicker">What he does</div>
+      <h2>Small footprint. Serious output.</h2>
+      <p>Click him and his laptop opens — two focused desks, built for founders doing outreach.</p>
+    </div>
+    <div class="fgrid" id="fgrid">
+      <div class="f"><span class="tag">research</span>
+        <h3>Answers with receipts</h3>
+        <p>Finds and vets investors, companies, and markets using live Google Search — and cites
+        where every fact came from. He never invents a name, an email, or a number.</p></div>
+      <div class="f"><span class="tag">write</span>
+        <h3>Ready-to-send drafts</h3>
+        <p>Ask for a cold email or a LinkedIn message and get a finished draft — subject, body,
+        sign-off. Copy it, or let him paste it straight into the field you were typing in.</p></div>
+      <div class="f"><span class="tag">humanize</span>
+        <h3>De-AI any text</h3>
+        <p>Select text anywhere, pick a voice — Subtle, Human, CEO, Founder, or describe your own —
+        and he rewrites it over your selection. Em-dashes eliminated.</p></div>
+      <div class="f"><span class="tag">collect</span>
+        <h3>Contacts → CSV</h3>
+        <p>Save contacts from research replies into a clean, deduplicated list — names, firms,
+        emails, links — and export the lot to CSV in one click.</p></div>
+      <div class="f"><span class="tag">companion</span>
         <h3>Quietly alive</h3>
-        <p>He strolls your screen and sits in a corner with bamboo while you work.
-        When you need him, he's one click away. When you don't, he stays out of the way.</p>
-      </div>
-      <div class="f">
-        <h3>Private by design</h3>
-        <p>No account. No sign-up. Runs on a hosted free tier, or bring your own Gemini
-        key — stored only on your Mac, sent only to Google.</p>
-      </div>
+        <p>He strolls your screen and sits in a corner with bamboo while you work. One click away
+        when you need him, out of the way when you don't.</p></div>
+      <div class="f"><span class="tag">private</span>
+        <h3>No account. Ever.</h3>
+        <p>No sign-up, no tracking dashboard, no email capture. A free hosted tier out of the box,
+        or bring your own Gemini key — stored only on your Mac.</p></div>
     </div>
   </section>
 </div>
 
-<div class="wrap band">
+<div class="wrap band reveal">
   <div class="inner">
     <div>
       <h2>Free to start.</h2>
@@ -245,10 +352,11 @@
 </div>
 
 <div class="wrap">
-  <section class="cta">
+  <section class="cta reveal">
     <h2>One command. He does the rest.</h2>
     <div class="install">
-      <div class="cmd">
+      <canvas id="peekCv" width="24" height="12" style="width:114px;height:57px"></canvas>
+      <div class="cmd" style="position:relative; z-index:1;">
         <code><span class="dollar">$</span> <span class="hl">curl</span> -fsSL https://raw.githubusercontent.com/ShivrajPatilHQ/Mr.Panda/main/install.sh | <span class="hl">bash</span></code>
         <button class="copy" data-copy>Copy</button>
       </div>
@@ -256,16 +364,17 @@
   </section>
 
   <footer>
-    <span>© 2026 Mr. Panda · built by Raj</span>
+    <span>© 2026 Mr. Panda · built by Raj · he works for bamboo</span>
     <a href="https://github.com/ShivrajPatilHQ/Mr.Panda" target="_blank" rel="noopener">Open source on GitHub ↗</a>
   </footer>
 </div>
 
 <script>
+  // ================= sprite =================
   const HEAD = [
     "..KKKK............KKKK..",".KKKKKK..........KKKKKK.",".KKKKWWWWWWWWWWWWWWKKKK.",
     "..KKWWWWWWWWWWWWWWWWKK..","..WWWWWWWWWWWWWWWWWWWW..","..WWSSSSSSSSSSSSSSSSWW..",
-    "..WWSXSSSSSSSSSSSSXSWW..","..WWWSSSSSSSSSSSSSSWWW..","..WWWWWWWWWWWWWWWWWWWW..",
+    "..WWSSSSSSSSSSSSSSSSWW..","..WWWSSSSSSSSSSSSSSWWW..","..WWWWWWWWWWWWWWWWWWWW..",
     "..WWWWWWWWWNNWWWWWWWWW..","..WWWWWWWWWWWWWWWWWWWW..","...WWWWWWWWWWWWWWWWWW..."
   ];
   const SUIT = [
@@ -277,30 +386,190 @@
   const PAL = { K:'#1c1c22', W:'#F2EFE4', N:'#1c1c22', S:'#0D1015', X:'#9FD8FF',
     T:'#2a2a32', H:'#F6F4EC', R:'#e5484d', D:'#E8C766' };
 
-  function draw(ctx, blink) {
-    ctx.clearRect(0, 0, 24, 24);
-    const rows = HEAD.concat(SUIT, LEGS);
+  // eye glints live in the visor: base positions (5,6) and (18,6);
+  // they shift toward the cursor within the visor bounds.
+  function drawPanda(ctx, rows, ox, oy, blink) {
+    ctx.clearRect(0, 0, 24, rows.length);
     for (let r = 0; r < rows.length; r++)
       for (let c = 0; c < rows[r].length; c++) {
-        let ch = rows[r][c];
+        const ch = rows[r][c];
         if (ch === '.') continue;
-        if (blink && ch === 'X') ch = 'S';
         ctx.fillStyle = PAL[ch];
         ctx.fillRect(c, r, 1, 1);
       }
+    if (!blink) {
+      const gy = 6 + oy;
+      let lx = 5 + ox, rx = 18 + ox;
+      if (gy === 7) { lx = Math.max(5, lx); rx = Math.min(18, rx); } // row 7's visor is narrower
+      ctx.fillStyle = PAL.X;
+      ctx.fillRect(lx, gy, 1, 1);
+      ctx.fillRect(rx, gy, 1, 1);
+    }
   }
 
-  const heroCtx = document.getElementById('pandaCv').getContext('2d');
-  const navCtx = document.getElementById('navCv').getContext('2d');
-  let t = 0;
-  draw(heroCtx, false); draw(navCtx, false);
+  const FULL = HEAD.concat(SUIT, LEGS);
+  const heroCv = document.getElementById('pandaCv');
+  const navCv = document.getElementById('navCv');
+  const peekCv = document.getElementById('peekCv');
+  const heroCtx = heroCv.getContext('2d');
+  const navCtx = navCv.getContext('2d');
+  const peekCtx = peekCv.getContext('2d');
+
+  let mouseX = innerWidth / 2, mouseY = innerHeight / 3;
+  addEventListener('mousemove', (e) => {
+    mouseX = e.clientX; mouseY = e.clientY;
+    document.getElementById('glow').style.setProperty('--gx', e.clientX + 'px');
+    document.getElementById('glow').style.setProperty('--gy', e.clientY + 'px');
+  }, { passive: true });
+
+  function eyeOffset(cv) {
+    const r = cv.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height * 0.28; // eye line
+    const dx = mouseX - cx, dy = mouseY - cy;
+    const ox = Math.abs(dx) < 30 ? 0 : (dx > 0 ? 1 : -1);
+    const oy = Math.abs(dy) < 40 ? 0 : (dy > 0 ? 1 : -1);
+    return { ox, oy };
+  }
+
+  let tick = 0, blinkUntil = 0;
   setInterval(() => {
-    t++;
-    const blink = (t % 40) < 2;   // a calm blink every ~5s
-    draw(heroCtx, blink);
-    draw(navCtx, blink);
+    tick++;
+    if (tick % 46 === 0) blinkUntil = tick + 2;       // calm blink ~every 5.7s
+    const blink = tick < blinkUntil;
+    let o = eyeOffset(heroCv);
+    drawPanda(heroCtx, FULL, o.ox, o.oy, blink);
+    o = eyeOffset(navCv);
+    drawPanda(navCtx, FULL, o.ox, o.oy, blink);
+    if (peekCv.getBoundingClientRect().top < innerHeight) {
+      o = eyeOffset(peekCv);
+      drawPanda(peekCtx, HEAD, o.ox, Math.min(o.oy, 0), blink); // peeking: never look down
+    }
   }, 125);
 
+  // ================= speech bubble =================
+  const QUIPS = [
+    "I write cold emails that get replies.",
+    "Ask me for 10 seed fintech investors.",
+    "Your draft sounds like ChatGPT. Fixable.",
+    "I cite my sources. Every time.",
+    "sent from my iphone",
+    "Currently eating bamboo. Still on the clock.",
+    "One command and I'm on your desktop."
+  ];
+  const bubble = document.getElementById('bubble');
+  const bubbleText = document.getElementById('bubbleText');
+  let qi = 0, typing = false;
+
+  function typeQuip(text, done) {
+    typing = true; bubble.classList.add('show'); bubbleText.textContent = '';
+    let i = 0;
+    const iv = setInterval(() => {
+      bubbleText.textContent = text.slice(0, ++i);
+      if (i >= text.length) {
+        clearInterval(iv);
+        setTimeout(() => {
+          bubble.classList.remove('show');
+          setTimeout(() => { typing = false; done && done(); }, 300);
+        }, 2600);
+      }
+    }, 34);
+  }
+  function nextQuip() {
+    if (typing) return;
+    typeQuip(QUIPS[qi % QUIPS.length], () => {});
+    qi++;
+  }
+  setTimeout(nextQuip, 1400);
+  setInterval(() => { if (!typing) nextQuip(); }, 9000);
+
+  // click → hop + immediate quip
+  const stage = document.getElementById('stage');
+  heroCv.addEventListener('click', () => {
+    stage.classList.remove('hop'); void stage.offsetWidth; stage.classList.add('hop');
+    if (!typing) nextQuip();
+  });
+
+  // ================= humanize demo =================
+  const VOICES = {
+    before: {
+      label: "draft.txt — sounds like a robot",
+      text: "I hope this email finds you well. I am reaching out to explore potential synergies between our organizations and would love to schedule a brief call at your earliest convenience to discuss further."
+    },
+    subtle: {
+      label: "humanized — subtle",
+      text: "Hope you're doing well. I'm reaching out because there's real overlap in what we're both building. Would you be open to a short call this week?"
+    },
+    human: {
+      label: "humanized — human",
+      text: "Hey — been following what you're building and it clicked with something we're working on. Any chance you're up for a quick call this week? Happy to work around your schedule."
+    },
+    ceo: {
+      label: "humanized — ceo",
+      text: "saw what you're building. we should talk.\n\n15 min this week?\n\nsent from my iphone"
+    },
+    founder: {
+      label: "humanized — founder",
+      text: "Building something you'll want to see. It solves the exact problem your portfolio keeps hitting. 15 minutes, any day this week — I'll bring the numbers."
+    }
+  };
+  const demoText = document.getElementById('demoText');
+  const demoLabel = document.getElementById('demoLabel');
+  const chips = [...document.querySelectorAll('.chip')];
+  let demoBusy = false;
+
+  function setDemo(instant, voice) {
+    const v = VOICES[voice];
+    if (instant) { demoText.textContent = v.text; demoLabel.textContent = v.label; return; }
+    if (demoBusy) return;
+    demoBusy = true;
+    chips.forEach(c => { c.disabled = true; c.classList.toggle('on', c.dataset.voice === voice); });
+    const cur = demoText.textContent;
+    let i = cur.length;
+    const erase = setInterval(() => {
+      i -= 4;
+      demoText.textContent = cur.slice(0, Math.max(0, i));
+      if (i <= 0) {
+        clearInterval(erase);
+        demoLabel.textContent = v.label;
+        let j = 0;
+        const caret = document.createElement('span'); caret.className = 'caret';
+        const type = setInterval(() => {
+          j += 2;
+          demoText.textContent = v.text.slice(0, j);
+          demoText.appendChild(caret);
+          if (j >= v.text.length) {
+            clearInterval(type);
+            setTimeout(() => { caret.remove(); }, 1200);
+            chips.forEach(c => c.disabled = false);
+            demoBusy = false;
+          }
+        }, 16);
+      }
+    }, 8);
+  }
+  setDemo(true, 'before');
+  chips.forEach(c => { if (c.dataset.voice === 'before') c.classList.add('on'); });
+  chips.forEach(c => c.addEventListener('click', () => setDemo(false, c.dataset.voice)));
+
+  // ================= spotlight cards =================
+  document.getElementById('fgrid').addEventListener('mousemove', (e) => {
+    for (const f of document.querySelectorAll('.f')) {
+      const r = f.getBoundingClientRect();
+      f.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+      f.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    }
+  }, { passive: true });
+
+  // ================= nav + reveal =================
+  const nav = document.getElementById('nav');
+  addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 8), { passive: true });
+
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // ================= copy =================
   const CMD = 'curl -fsSL https://raw.githubusercontent.com/ShivrajPatilHQ/Mr.Panda/main/install.sh | bash';
   document.querySelectorAll('[data-copy]').forEach(b => {
     b.addEventListener('click', async () => {
