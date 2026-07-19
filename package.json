@@ -1,6 +1,6 @@
 {
   "name": "panda-assistant",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Mr. Panda — a corporate desktop assistant that helps with research, investor finding, and data collection.",
   "main": "main.js",
   "scripts": {
