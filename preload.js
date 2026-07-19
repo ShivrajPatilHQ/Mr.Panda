@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('panda', {
   closeChat: () => ipcRenderer.send('close-chat'),
   ask: (message, attachments, mode) => ipcRenderer.invoke('ask', { message, attachments, mode }),
   getConfig: () => ipcRenderer.invoke('get-config'),
+  getStatus: () => ipcRenderer.invoke('get-status'),
   saveConfig: (patch) => ipcRenderer.invoke('save-config', patch),
   listModels: () => ipcRenderer.invoke('list-models'),
   resetChat: (mode) => ipcRenderer.send('reset-chat', mode),

@@ -36,6 +36,7 @@
   .pill { font-size:12px; color:var(--ink); background:var(--soft); border:none; border-radius:8px;
     padding:5px 10px; cursor:pointer; }
   .pill:hover { background:var(--soft2); }
+  .modebtn.on { background:var(--ink); color:#fff; }
   .tools .muted { font-size:11px; color:var(--muted); margin-left:auto; }
 
   #log { flex:1; overflow-y:auto; padding:14px 13px; display:flex; flex-direction:column; gap:12px;
@@ -140,15 +141,24 @@
     <div class="sheet" id="settingsSheet">
       <div class="shead"><button class="ic sback" aria-label="Back">&#8592;</button><span class="t">Settings</span></div>
       <div class="sbody">
-        <label class="f">Gemini API key</label>
-        <input id="keyInput" class="in" type="password" placeholder="paste your key" autocomplete="off" />
-        <label class="f">Model</label>
-        <div class="modelrow">
-          <select id="modelSel" class="in"><option>loading…</option></select>
-          <button class="pill" id="listModels">refresh</button>
+        <div style="display:flex; gap:6px; margin-bottom:4px;">
+          <button class="pill modebtn" id="modeHostedBtn" style="flex:1;">Free</button>
+          <button class="pill modebtn" id="modeByokBtn" style="flex:1;">My own key</button>
         </div>
+        <div id="hostedInfo" class="hint"></div>
+
+        <div id="byokFields" style="display:none">
+          <label class="f">Gemini API key</label>
+          <input id="keyInput" class="in" type="password" placeholder="paste your key" autocomplete="off" />
+          <label class="f">Model</label>
+          <div class="modelrow">
+            <select id="modelSel" class="in"><option>loading…</option></select>
+            <button class="pill" id="listModels">refresh</button>
+          </div>
+          <div class="hint">Free key at aistudio.google.com/apikey. Saved only on this Mac, sent only to Google.</div>
+        </div>
+
         <div class="toggle"><span>Search the live web</span><div class="switch" id="webSwitch"><div class="knob"></div></div></div>
-        <div class="hint">Free key at aistudio.google.com/apikey. Saved only on this Mac, sent only to Google.</div>
         <button class="primary" id="saveKey">Save</button>
         <div class="status" id="skeyStatus"></div>
       </div>
@@ -302,23 +312,52 @@
 
   // ---- config / settings ----
   const keyInput = $('keyInput'), modelSel = $('modelSel'), skeyStatus = $('skeyStatus'),
-        webSwitch = $('webSwitch');
-  let hasKey = false, webOn = true;
+        webSwitch = $('webSwitch'), hostedInfo = $('hostedInfo'), byokFields = $('byokFields'),
+        modeHostedBtn = $('modeHostedBtn'), modeByokBtn = $('modeByokBtn');
+  let hasKey = false, webOn = true, mode = 'hosted';
   function setModelOptions(list, current){
     const set = new Set(list); if(current) set.add(current);
     modelSel.innerHTML = '';
     [...set].forEach(m => { const o=document.createElement('option'); o.value=m; o.textContent=m; if(m===current)o.selected=true; modelSel.appendChild(o); });
     if(!modelSel.options.length){ const o=document.createElement('option'); o.textContent='(set key)'; modelSel.appendChild(o); }
   }
+  function setModeUI(m){
+    mode = m;
+    modeHostedBtn.classList.toggle('on', m === 'hosted');
+    modeByokBtn.classList.toggle('on', m === 'byok');
+    byokFields.style.display = m === 'byok' ? 'block' : 'none';
+    hostedInfo.style.display = m === 'hosted' ? 'block' : 'none';
+  }
   async function refreshConfig(){
     if(!api.getConfig) return;
     const c = await api.getConfig();
     hasKey = !!c.hasKey; webOn = c.webSearch !== false;
+    setModeUI(c.mode || 'hosted');
     webSwitch.classList.toggle('on', webOn);
     setModelOptions(c.geminiModel?[c.geminiModel]:[], c.geminiModel);
-    statusLine.textContent = (hasKey ? 'online' : 'add your key') + (c.geminiModel ? ' · ' + c.geminiModel.replace('gemini-','') : '');
-    skeyStatus.textContent = hasKey ? '✓ key saved' : ''; skeyStatus.style.color = '#2a7';
+    skeyStatus.textContent = (mode === 'byok' && hasKey) ? '✓ key saved' : ''; skeyStatus.style.color = '#2a7';
+    await refreshStatus();
   }
+  async function refreshStatus(){
+    if(!api.getStatus) return;
+    const s = await api.getStatus();
+    if(s.mode === 'hosted'){
+      if(s.error === 'OFFLINE' || s.error === 'DB_DOWN'){
+        hostedInfo.textContent = 'Hosted service unreachable right now — try again shortly, or use your own key.';
+        statusLine.textContent = 'offline';
+      } else if(s.plan === 'pro'){
+        hostedInfo.textContent = 'Pro plan — unlimited messages.';
+        statusLine.textContent = 'online · pro';
+      } else {
+        hostedInfo.textContent = 'Free plan — ' + (s.remaining==null?'?':s.remaining) + ' of ' + (s.limit||5) + ' messages left today.';
+        statusLine.textContent = (s.remaining==null?'?':s.remaining) + '/' + (s.limit||5) + ' free today';
+      }
+    } else {
+      statusLine.textContent = (hasKey ? 'online' : 'add your key') + ' · your key';
+    }
+  }
+  modeHostedBtn.addEventListener('click', async () => { setModeUI('hosted'); await api.saveConfig({ mode: 'hosted' }); await refreshStatus(); });
+  modeByokBtn.addEventListener('click', async () => { setModeUI('byok'); await api.saveConfig({ mode: 'byok' }); await refreshStatus(); });
   webSwitch.addEventListener('click', () => { webOn = !webOn; webSwitch.classList.toggle('on', webOn); api.saveConfig && api.saveConfig({ webSearch: webOn }); });
   modelSel.addEventListener('change', () => { api.saveConfig && api.saveConfig({ geminiModel: modelSel.value }); refreshConfig(); });
   $('listModels').addEventListener('click', async () => {
@@ -420,7 +459,10 @@
     t.remove();
     if(r && r.ok){ pushMsg('panda', r.text); }
     else if(r && r.code==='NO_KEY'){ pushMsg('err','I need a Gemini key — open Settings and paste one.'); openSheet('settingsSheet'); }
+    else if(r && (r.code==='LIMIT' || r.code==='GLOBAL_BUSY')){ pushMsg('err', r.error); openSheet('settingsSheet'); }
+    else if(r && r.code==='OFFLINE'){ pushMsg('err', r.error); }
     else { pushMsg('err', "That didn't work: " + ((r&&r.error)||'unknown error')); }
+    refreshStatus();
     awaiting=false; inp.focus();
   }
   $('send').addEventListener('click', reply);

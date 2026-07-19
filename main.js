@@ -302,6 +302,7 @@ ipcMain.handle('ask', async (_e, payload) => {
   }
 });
 ipcMain.handle('get-config', () => brain.getConfig());
+ipcMain.handle('get-status', () => brain.getStatus());
 ipcMain.handle('save-config', (_e, patch) => brain.saveConfig(patch));
 ipcMain.handle('list-models', async () => {
   try { return { ok: true, models: await brain.listModels() }; }
