@@ -367,7 +367,8 @@
         hostedInfo.textContent = 'Pro plan — unlimited messages.';
         statusLine.textContent = 'online · pro';
       } else {
-        hostedInfo.textContent = 'Free plan — ' + (s.remaining==null?'?':s.remaining) + ' of ' + (s.limit||5) + ' messages left today.';
+        hostedInfo.textContent = 'Free plan — ' + (s.remaining==null?'?':s.remaining) + ' of ' + (s.limit||5)
+          + ' messages left today. Model is picked for you; switch to "My own key" to choose your own.';
         statusLine.textContent = (s.remaining==null?'?':s.remaining) + '/' + (s.limit||5) + ' free today';
       }
     } else {

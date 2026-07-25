@@ -37,12 +37,15 @@ let dragging = false;
 let dragOffset = null;
 let idleSince = Date.now();
 let roamTimer = null, moveTimer = null, dragTimer = null;
+let lastRoamAt = Date.now();   // watchdog heartbeat — see startRoamWatchdog()
 
 // --- tunables ---
 const WIN_W = 140;        // wide enough for the pixel sprite + his briefcase
 const WIN_H = 104;        // tight around the sprite so he can reach the edges
 const TICK = 16;          // ~60fps
 const IDLE_TO_BAMBOO = 16000;
+const EAT_MS = 9000;      // how long a bamboo break lasts before he strolls off again
+const ROAM_STALL_MS = 40000;  // no roam activity this long => watchdog restarts him
 
 // Transparent margin between the window edges and the visible panda. Roaming
 // uses these so the SPRITE (not the window) reaches the screen edges and top.
@@ -73,7 +76,7 @@ function createWindow() {
   const wa = workArea();
   win.setBounds({ x: wa.x + wa.width - WIN_W - 30, y: wa.y + wa.height - WIN_H - 30, width: WIN_W, height: WIN_H });
 
-  win.webContents.on('did-finish-load', () => { idleSince = Date.now(); scheduleNextMove(); });
+  win.webContents.on('did-finish-load', () => { idleSince = Date.now(); scheduleNextMove(); startRoamWatchdog(); });
 }
 
 // The chat lives in its OWN resizable window, but stays leashed to the panda:
@@ -144,9 +147,11 @@ function walkTo(tx, ty, onArrive) {
   if (![sx, sy, tx, ty].every(Number.isFinite)) { if (onArrive) onArrive(); return; }
   const dist = Math.hypot(tx - sx, ty - sy);
   if (dist < 4) { if (onArrive) onArrive(); return; }
-  const dur = Math.max(600, dist * 14);      // slower = calmer stroll
-  const hops = Math.max(1, Math.round(dist / 55));
-  const amp = 7;                              // hop height
+  // Pace: brisk but calm. Long treks are capped so crossing the screen doesn't
+  // turn into a 17-second hop-fest — that reads as "stuck jumping", not strolling.
+  const dur = Math.min(Math.max(500, dist * 8), 5200);
+  const hops = Math.max(1, Math.round(dist / 90));  // fewer, longer strides
+  const amp = 6;                              // hop height
   const t0 = Date.now();
   tell(tx >= sx ? 'walk-right' : 'walk-left');
   moveTimer = setInterval(() => {
@@ -161,8 +166,29 @@ function walkTo(tx, ty, onArrive) {
       const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;  // easeInOutQuad
       const hop = Math.abs(Math.sin(t * Math.PI * hops)) * amp;
       safeSetPos(sx + (tx - sx) * e, sy + (ty - sy) * e - hop);
-    } catch (_e) { clearInterval(moveTimer); }
+    } catch (e) {
+      // A bad frame must not silently end the walk — that used to leave him
+      // frozen mid-stride forever. Log it, then carry on with the roam loop.
+      console.error('[main] walk step failed:', (e && e.stack) || e);
+      clearInterval(moveTimer);
+      if (onArrive) onArrive();
+    }
   }, TICK);
+}
+
+// Last line of defence: if anything ever leaves the roam loop unscheduled — a
+// swallowed error, a drag that never reported its end — get him moving again
+// rather than leaving him parked mid-screen.
+function startRoamWatchdog() {
+  setInterval(() => {
+    if (!onScreen || busy || dragging || isEating) return;
+    if (Date.now() - lastRoamAt < ROAM_STALL_MS) return;
+    console.warn('[main] roam loop stalled — restarting');
+    dragging = false;
+    clearInterval(moveTimer);
+    tell('idle');
+    scheduleNextMove();
+  }, 10000);
 }
 
 function wanderSpot() {
@@ -187,13 +213,26 @@ function nearestCorner() {
 
 function scheduleNextMove() {
   clearTimeout(roamTimer);
+  lastRoamAt = Date.now();
   if (!onScreen || busy || dragging) return;
   const pause = 2200 + Math.random() * 3500;
   roamTimer = setTimeout(() => {
     if (!onScreen || busy || dragging) return;
     if (Date.now() - idleSince > IDLE_TO_BAMBOO) {
       const c = nearestCorner();
-      walkTo(c.x, c.y, () => { isEating = true; tell('eat'); });
+      walkTo(c.x, c.y, () => {
+        isEating = true; tell('eat');
+        // Snack for a bit, then get back to strolling. Without this he reaches the
+        // corner and stays frozen there until you touch him — the roam loop ends.
+        clearTimeout(roamTimer);
+        roamTimer = setTimeout(() => {
+          if (!onScreen || busy || dragging) return;
+          isEating = false;
+          idleSince = Date.now();   // fresh wander window before the next bamboo break
+          tell('idle');
+          scheduleNextMove();
+        }, EAT_MS);
+      });
     } else {
       const t = wanderSpot();
       walkTo(t.x, t.y, () => { tell('idle'); scheduleNextMove(); });
