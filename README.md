@@ -55,6 +55,10 @@ bring your own API key. A hosted Pro tier removes the daily limit without you ne
 key of your own — that's a convenience service, not a different product. All the code is
 here either way.
 
+## Help
+
+Stuck, or found a bug? Email **bamboo@mrpanda.app**.
+
 ## License
 
 Copyright (C) 2026 EmergeSphere Technologies Pvt. Ltd.

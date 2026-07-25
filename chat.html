@@ -204,6 +204,9 @@
         <div class="toggle" id="webRow"><span>Search the live web</span><div class="switch" id="webSwitch"><div class="knob"></div></div></div>
         <button class="primary" id="saveKey">Save</button>
         <div class="status" id="skeyStatus"></div>
+        <div class="hint" style="margin-top:16px">
+          Stuck or found a bug? Email <a href="#" id="helpMail">bamboo@mrpanda.app</a>
+        </div>
       </div>
     </div>
 
@@ -447,6 +450,7 @@
       : s.remaining + ' of ' + (s.limit||5) + ' free messages left today.';
   }
   $('proBtn').addEventListener('click', () => api.openUrl && api.openUrl(PRO_URL));
+  $('helpMail').addEventListener('click', (e) => { e.preventDefault(); api.openUrl && api.openUrl('mailto:bamboo@mrpanda.app'); });
 
   // Update notice: checked once on open, dismissible, never auto-installs.
   $('updX').addEventListener('click', () => { updBar.style.display = 'none'; });

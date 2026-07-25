@@ -325,8 +325,10 @@ ipcMain.on('drag-end', () => {
 
 // Only ever open our own site or a provider console — never arbitrary input.
 const URL_ALLOW = /^https:\/\/(mrpanda\.app|www\.mrpanda\.app|console\.anthropic\.com|aistudio\.google\.com|platform\.openai\.com|github\.com)(\/|$)/;
+const MAILTO_ALLOW = 'mailto:bamboo@mrpanda.app';
 ipcMain.on('open-url', (_e, url) => {
-  if (typeof url === 'string' && URL_ALLOW.test(url)) shell.openExternal(url);
+  if (typeof url !== 'string') return;
+  if (url === MAILTO_ALLOW || URL_ALLOW.test(url)) shell.openExternal(url);
 });
 
 // Update check: ask the backend what the latest build is. Purely informational —
