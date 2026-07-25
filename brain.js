@@ -511,7 +511,19 @@ async function oaiFetch(pathname, init, ms) {
 async function oaiChat(messages, opts) {
   const { model } = oaiCfg();
   const body = Object.assign({ model, messages }, opts || {});
-  const data = await oaiFetch('/chat/completions', { method: 'POST', body: JSON.stringify(body) });
+  let data;
+  try {
+    data = await oaiFetch('/chat/completions', { method: 'POST', body: JSON.stringify(body) });
+  } catch (e) {
+    // Newer OpenAI models reject max_tokens and demand max_completion_tokens.
+    // Retry once in that dialect rather than failing the user's message.
+    if (e.code === 'API_ERROR' && body.max_tokens && /max_tokens|max_completion_tokens/i.test(e.message)) {
+      const alt = Object.assign({}, body);
+      alt.max_completion_tokens = alt.max_tokens;
+      delete alt.max_tokens;
+      data = await oaiFetch('/chat/completions', { method: 'POST', body: JSON.stringify(alt) });
+    } else throw e;
+  }
   const choice = data && data.choices && data.choices[0];
   return {
     text: ((choice && choice.message && choice.message.content) || '').trim(),
