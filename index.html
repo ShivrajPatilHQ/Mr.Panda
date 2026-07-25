@@ -129,9 +129,33 @@
     if (s === 'walk-left')  { state = 'walk'; faceLeft = true; }
     else if (s === 'walk-right') { state = 'walk'; faceLeft = false; }
     else if (s === 'eat')  { state = 'eat'; }
+    else if (s === 'sleep'){ state = 'sleep'; }
     else if (s === 'work') { state = 'work'; laptopT = 0; }
     else { state = 'idle'; }
   });
+
+  // "z" glyphs drawn in sprite-grid coords, in the clear space up and to the
+  // right of his head so they never sit on his face.
+  const Z_SMALL = ["XXX", "..X", "XXX"];
+  const Z_BIG   = ["XXXX", "...X", "..X.", ".X..", "XXXX"];
+  function drawZ(px, py, rows, color){
+    rows.forEach((row, ry) => {
+      for (let rx = 0; rx < row.length; rx++) {
+        if (row[rx] === 'X') fillPx(px + rx, py + ry, color);
+      }
+    });
+  }
+  // Puffs drift up and to the right, growing and fading as they go.
+  function drawSleepZs(){
+    for (let i = 0; i < 3; i++) {
+      const t = (((tick / 34) + i * 0.34) % 1);
+      if (t > 0.86) continue;
+      const px = Math.round(22 + t * 7);
+      const py = Math.round(5 - t * 8);
+      const big = t > 0.45;
+      drawZ(px, py, big ? Z_BIG : Z_SMALL, t > 0.68 ? '#6E6E7A' : '#C6C6D0');
+    }
+  }
 
   function update(){
     if (state === 'work') { if (laptopT < 6) laptopT += 0.6; } else { laptopT = 0; }
@@ -147,10 +171,13 @@
     ctx.save();
     if (faceLeft){ ctx.translate(W, 0); ctx.scale(-1, 1); }
 
-    if (state === 'eat' || state === 'work'){
+    if (state === 'eat' || state === 'work' || state === 'sleep'){
       drawRows(SIT_POSE, 0, 0);
       drawBriefcase(-6, 15);                 // parked behind him
-      if (state === 'eat'){
+      if (state === 'sleep'){
+        fillPx(5, 6, PAL.S); fillPx(18, 6, PAL.S);   // eyes shut (no lens glint)
+        drawSleepZs();
+      } else if (state === 'eat'){
         const arr = (Math.floor(tick/8) % 2 === 1) ? EAT_B : EAT_A;
         arr.forEach(([x,y,k]) => fillPx(x, y, PAL[k]));
       } else {
@@ -171,9 +198,13 @@
     ctx.restore();
   }
 
-  // 30 fps tick loop (per spec)
-  setInterval(() => { tick++; update(); render(); }, 1000/30);
-  render();
+  // 30 fps while he's awake; asleep he drops to ~4 fps so a dozing panda costs
+  // almost nothing on battery. (Only the zzZ needs to move at that point.)
+  function loop(){
+    tick++; update(); render();
+    setTimeout(loop, state === 'sleep' ? 250 : 1000/30);
+  }
+  loop();
 
   // ---- interaction: quick tap = open laptop + chat; hold+move = drag ----
   function poke(){ api.interact && api.interact(); }

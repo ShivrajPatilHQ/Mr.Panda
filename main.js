@@ -9,8 +9,10 @@
 // Affero General Public License for more details: <https://www.gnu.org/licenses/>.
 
 // Mr. Panda — Electron main process (Phase 1.6)
-// A small desktop pet that roams with a lifelike bounce, eats bamboo when idle,
-// is fully CLICKABLE, hand-draggable, and can tuck into the macOS menu bar.
+// A small desktop pet that stays where you put him. Left alone for a quiet spell
+// he walks to the nearest corner, eats his bamboo, then falls asleep there (which
+// also stops the animation, so he costs no battery while you work).
+// Fully CLICKABLE, hand-draggable, and can tuck into the macOS menu bar.
 // Nothing here touches your system — it just moves a small floating window.
 
 const { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen, dialog, clipboard, shell } = require('electron');
@@ -33,6 +35,7 @@ let onScreen = true;
 let chatOpen = false;
 let busy = false;         // chat open -> don't wander
 let isEating = false;
+let settled = false;      // parked in a corner: eating, then asleep
 let dragging = false;
 let dragOffset = null;
 let idleSince = Date.now();
@@ -43,9 +46,11 @@ let lastRoamAt = Date.now();   // watchdog heartbeat — see startRoamWatchdog()
 const WIN_W = 140;        // wide enough for the pixel sprite + his briefcase
 const WIN_H = 104;        // tight around the sprite so he can reach the edges
 const TICK = 16;          // ~60fps
-const IDLE_TO_BAMBOO = 16000;
-const EAT_MS = 9000;      // how long a bamboo break lasts before he strolls off again
-const ROAM_STALL_MS = 40000;  // no roam activity this long => watchdog restarts him
+// Quiet spell before he gives up on you and goes to sit in his corner.
+const IDLE_TO_CORNER_MIN = 30000;
+const IDLE_TO_CORNER_MAX = 60000;
+const EAT_MS = 20000;         // bamboo break in the corner, then he dozes off
+const ROAM_STALL_MS = 90000;  // watchdog: nothing happened this long => re-arm
 
 // Transparent margin between the window edges and the visible panda. Roaming
 // uses these so the SPRITE (not the window) reaches the screen edges and top.
@@ -113,7 +118,7 @@ function positionChat() {
 function toggleChat() {
   if (!chatWin) return;
   if (chatOpen) {
-    chatOpen = false; busy = false; idleSince = Date.now();
+    chatOpen = false; busy = false; wake();
     tell('idle');                   // close the laptop, back to roaming
     chatWin.hide(); scheduleNextMove();
   } else {
@@ -181,24 +186,14 @@ function walkTo(tx, ty, onArrive) {
 // rather than leaving him parked mid-screen.
 function startRoamWatchdog() {
   setInterval(() => {
-    if (!onScreen || busy || dragging || isEating) return;
+    if (!onScreen || busy || dragging || settled) return;
     if (Date.now() - lastRoamAt < ROAM_STALL_MS) return;
-    console.warn('[main] roam loop stalled — restarting');
+    console.warn('[main] settle timer stalled — re-arming');
     dragging = false;
     clearInterval(moveTimer);
     tell('idle');
     scheduleNextMove();
   }, 10000);
-}
-
-function wanderSpot() {
-  // Pick anywhere in the full roaming range so he explores the whole screen —
-  // top, sides and corners included, not just a short hop from where he is.
-  const b = bounds();
-  return {
-    x: Math.round(b.xmin + Math.random() * (b.xmax - b.xmin)),
-    y: Math.round(b.ymin + Math.random() * (b.ymax - b.ymin))
-  };
 }
 
 function nearestCorner() {
@@ -211,33 +206,35 @@ function nearestCorner() {
   return c[0];
 }
 
+// He does NOT wander. He stands wherever you left him, and if no work comes his
+// way he settles: after a quiet spell he walks to the nearest corner, sits with
+// his bamboo, and then dozes off there. Nothing moves again until you want him.
 function scheduleNextMove() {
   clearTimeout(roamTimer);
   lastRoamAt = Date.now();
   if (!onScreen || busy || dragging) return;
-  const pause = 2200 + Math.random() * 3500;
+  if (settled) return;                       // already parked in his corner
+  const wait = IDLE_TO_CORNER_MIN + Math.random() * (IDLE_TO_CORNER_MAX - IDLE_TO_CORNER_MIN);
   roamTimer = setTimeout(() => {
-    if (!onScreen || busy || dragging) return;
-    if (Date.now() - idleSince > IDLE_TO_BAMBOO) {
-      const c = nearestCorner();
-      walkTo(c.x, c.y, () => {
-        isEating = true; tell('eat');
-        // Snack for a bit, then get back to strolling. Without this he reaches the
-        // corner and stays frozen there until you touch him — the roam loop ends.
-        clearTimeout(roamTimer);
-        roamTimer = setTimeout(() => {
-          if (!onScreen || busy || dragging) return;
-          isEating = false;
-          idleSince = Date.now();   // fresh wander window before the next bamboo break
-          tell('idle');
-          scheduleNextMove();
-        }, EAT_MS);
-      });
-    } else {
-      const t = wanderSpot();
-      walkTo(t.x, t.y, () => { tell('idle'); scheduleNextMove(); });
-    }
-  }, pause);
+    if (!onScreen || busy || dragging || settled) return;
+    const c = nearestCorner();
+    walkTo(c.x, c.y, () => {
+      settled = true; isEating = true; tell('eat');
+      clearTimeout(roamTimer);
+      roamTimer = setTimeout(() => {
+        if (!onScreen || busy || dragging) return;
+        isEating = false;
+        tell('sleep');                       // zzZ — renderer drops to a low frame rate
+      }, EAT_MS);
+    });
+  }, wait);
+}
+
+// Anything that means "he's wanted again": wake him and restart the quiet timer.
+function wake() {
+  settled = false;
+  isEating = false;
+  idleSince = Date.now();
 }
 
 // ---- menu bar (tray) ----
@@ -273,12 +270,12 @@ function createTray() {
 }
 
 function showOnScreen() {
-  onScreen = true; busy = false; isEating = false;
+  onScreen = true; busy = false; wake();
   const wa = workArea();
   win.setBounds({ x: wa.x + wa.width - WIN_W - 30, y: wa.y + 30, width: WIN_W, height: WIN_H });
   win.show();                 // show() is reliable for accessory apps; showInactive isn't
   win.setAlwaysOnTop(true);
-  idleSince = Date.now(); tell('idle'); scheduleNextMove();
+  tell('idle'); scheduleNextMove();
 }
 
 function toggleScreen() {
@@ -293,15 +290,15 @@ function toggleScreen() {
 
 // ---- IPC ----
 ipcMain.on('interact', () => {
-  idleSince = Date.now();
   clearInterval(moveTimer);
-  isEating = false; tell(busy ? 'work' : 'idle'); // keep the laptop pose while chatting
+  wake();
+  tell(busy ? 'work' : 'idle'); // keep the laptop pose while chatting
   if (!busy && !dragging) scheduleNextMove();
 });
 
 // Hand-dragging: follow the cursor while the mouse is held on the panda.
 ipcMain.on('drag-start', () => {
-  dragging = true;
+  dragging = true; wake();
   clearTimeout(roamTimer); clearInterval(moveTimer);
   const c = screen.getCursorScreenPoint(), b = win.getBounds();
   dragOffset = { x: c.x - b.x, y: c.y - b.y };
@@ -318,7 +315,7 @@ ipcMain.on('drag-start', () => {
 });
 ipcMain.on('drag-end', () => {
   dragging = false; clearInterval(dragTimer);
-  idleSince = Date.now();
+  wake(); tell('idle');   // he waits where you dropped him, then settles
   if (!busy) scheduleNextMove();
 });
 
