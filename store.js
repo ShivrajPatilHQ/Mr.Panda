@@ -43,7 +43,13 @@ function clear() { items = []; persist(); return items; }
 
 function toCSV() {
   const cols = COLS.concat(['addedAt']);
-  const esc = s => { s = String(s == null ? '' : s); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const esc = s => {
+    s = String(s == null ? '' : s);
+    // Leading = + - @ (or tab/CR) makes Excel and Sheets treat the cell as a
+    // formula. This data comes from scraped pages, so neutralise it.
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
   const rows = [cols.join(',')];
   items.forEach(it => rows.push(cols.map(c => esc(it[c])).join(',')));
   return rows.join('\n');

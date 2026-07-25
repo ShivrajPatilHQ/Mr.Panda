@@ -47,6 +47,8 @@ async function connectMongo() {
     await db.collection('devices').createIndex({ accountId: 1 });
     // loginCodes auto-expire via a TTL index on expiresAt.
     await db.collection('loginCodes').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await db.collection('emailSends').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await db.collection('counters').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
     mongoOk = true;
     console.log('[db] connected to', MONGO_DB);
   } catch (e: any) {
@@ -61,6 +63,7 @@ const usage = () => db.collection('usage');
 const counters = () => db.collection('counters');
 const accounts = () => db.collection('accounts');
 const loginCodes = () => db.collection('loginCodes');
+const emailSends = () => db.collection('emailSends');
 
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: DAY_TZ });
 const normEmail = (e: string) => String(e || '').trim().toLowerCase();
@@ -132,6 +135,29 @@ function rateLimited(ip: string) {
   const arr = (ipHits.get(ip) || []).filter(t => now - t < WIN);
   arr.push(now); ipHits.set(ip, arr);
   return arr.length > MAX;
+}
+// Without this the map keeps an entry for every IP ever seen — a slow leak that
+// only shows up after the container has been up for weeks.
+setInterval(() => {
+  const cutoff = Date.now() - 60000;
+  for (const [ip, arr] of ipHits) {
+    const live = arr.filter(t => t > cutoff);
+    if (live.length) ipHits.set(ip, live); else ipHits.delete(ip);
+  }
+}, 300000);
+
+// Free usage is metered per device, but a device id is just a string the client
+// makes up — anyone can mint a fresh one for another 5 messages. Cap free use per
+// IP per day too, so the bypass costs real infrastructure instead of a loop.
+const IP_FREE_DAILY = parseInt(env.IP_FREE_DAILY || '25', 10) || 25;
+async function ipOverDailyFree(ip: string, day: string) {
+  if (ip === 'unknown') return false;
+  const res: any = await counters().findOneAndUpdate(
+    { _id: `ip:${ip}:${day}` },
+    { $inc: { count: 1 }, $setOnInsert: { ip, day, expiresAt: new Date(Date.now() + 36 * 3600 * 1000) } },
+    { upsert: true, returnDocument: 'after' }
+  );
+  return (res?.count ?? 1) > IP_FREE_DAILY;
 }
 
 // ---------- Gemini (the brain, server-side so the key never ships) ----------
@@ -256,6 +282,7 @@ app.get('/v1/version', (c) => c.json({
 }));
 
 app.post('/v1/register', async (c) => {
+  if (rateLimited(ipOf(c))) return c.json({ ok: false, code: 'RATE' }, 429);
   if (!mongoOk) return c.json({ ok: false, code: 'DB_DOWN' }, 503);
   const body: any = await c.req.json().catch(() => ({}));
   let deviceId = String(body.deviceId || '').trim() || crypto.randomUUID();
@@ -264,6 +291,7 @@ app.post('/v1/register', async (c) => {
 });
 
 app.get('/v1/me', async (c) => {
+  if (rateLimited(ipOf(c))) return c.json({ ok: false, code: 'RATE' }, 429);
   if (!mongoOk) return c.json({ ok: false, code: 'DB_DOWN' }, 503);
   const deviceId = String(c.req.query('device') || '').trim();
   if (!deviceId) return c.json({ ok: false, code: 'NO_DEVICE' }, 400);
@@ -279,8 +307,11 @@ app.get('/v1/me', async (c) => {
   });
 });
 
+const MAX_BODY = 12 * 1024 * 1024;   // attachments are base64, so keep a real ceiling
 app.post('/v1/generate', async (c) => {
   if (APP_TOKEN && c.req.header('x-app-token') !== APP_TOKEN) return c.json({ ok: false, code: 'FORBIDDEN' }, 403);
+  const declared = parseInt(c.req.header('content-length') || '0', 10);
+  if (declared > MAX_BODY) return c.json({ ok: false, code: 'TOO_LARGE' }, 413);
   if (rateLimited(ipOf(c))) return c.json({ ok: false, code: 'RATE' }, 429);
   if (!mongoOk) return c.json({ ok: false, code: 'DB_DOWN', error: 'service starting, try again' }, 503);
   if (!GEMINI_API_KEY) return c.json({ ok: false, code: 'NO_SERVER_KEY' }, 500);
@@ -296,6 +327,7 @@ app.post('/v1/generate', async (c) => {
   const day = today();
 
   if (!isPro && countable) {
+    if (await ipOverDailyFree(ipOf(c), day)) return c.json({ ok: false, code: 'LIMIT', limit: FREE_LIMIT }, 429);
     const g: any = await counters().findOne({ _id: `global:${day}` });
     if ((g?.count || 0) >= GLOBAL_CAP) return c.json({ ok: false, code: 'GLOBAL_BUSY' }, 429);
     const consumed = await tryConsume(deviceId, day, FREE_LIMIT);
@@ -355,7 +387,17 @@ app.post('/v1/account/request-code', async (c) => {
   if (existing && existing.sentAt && Date.now() - new Date(existing.sentAt).getTime() < 30000) {
     return c.json({ ok: false, code: 'TOO_SOON' }, 429);
   }
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  // Cap sends per address per hour so nobody can use us to bomb someone's inbox.
+  // Counted in its own collection: the loginCodes doc TTLs out after 10 minutes,
+  // so a counter stored there would reset long before the hour was up.
+  const sends: any = await emailSends().findOneAndUpdate(
+    { _id: email },
+    { $inc: { count: 1 }, $setOnInsert: { expiresAt: new Date(Date.now() + 3600000) } },
+    { upsert: true, returnDocument: 'after' }
+  );
+  if ((sends?.count ?? 1) > 6) return c.json({ ok: false, code: 'TOO_MANY' }, 429);
+  // Math.random() is predictable — this code grants account access, so use CSPRNG.
+  const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
   await loginCodes().updateOne(
     { _id: email },
     { $set: { email, code, attempts: 0, sentAt: new Date(), expiresAt: new Date(Date.now() + CODE_TTL_MS) } },
