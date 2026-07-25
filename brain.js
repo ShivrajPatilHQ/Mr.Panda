@@ -19,7 +19,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const SERVER_URL = 'http://nksggc8k000ssws8oowckckg.72.62.199.199.sslip.io';
+// Override with MRPANDA_API_URL to point a self-hosted build at your own backend.
+const SERVER_URL = process.env.MRPANDA_API_URL || 'https://api.mrpanda.app';
 // Light abuse gate shared with the server — not a real secret, just discourages
 // randoms from hitting the API directly (matches server/.env's APP_TOKEN).
 const APP_TOKEN = 'bmuCjk7kgvSs5hRe87VeJsBFCtFIpK6znR64dcLFws8';
