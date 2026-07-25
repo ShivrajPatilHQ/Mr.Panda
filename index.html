@@ -124,18 +124,25 @@
   let tick = 0;
   let laptopT = 0;
   let crumbs = [];
+  let zDir = 1;         // +1 = zzZ on his right, -1 = on his left
 
   api.onState && api.onState((s) => {
     if (s === 'walk-left')  { state = 'walk'; faceLeft = true; }
     else if (s === 'walk-right') { state = 'walk'; faceLeft = false; }
     else if (s === 'eat')  { state = 'eat'; }
-    else if (s === 'sleep'){ state = 'sleep'; }
+    else if (s === 'sleep' || s === 'sleep-left' || s === 'sleep-right'){
+      state = 'sleep';
+      // Which side the zzZ drifts to. In a corner the window's far margin hangs
+      // off the screen, so they must rise on the side facing the screen middle.
+      if (s === 'sleep-left') zDir = -1;
+      else if (s === 'sleep-right') zDir = 1;
+    }
     else if (s === 'work') { state = 'work'; laptopT = 0; }
     else { state = 'idle'; }
   });
 
-  // "z" glyphs drawn in sprite-grid coords, in the clear space up and to the
-  // right of his head so they never sit on his face.
+  // "z" glyphs drawn in sprite-grid coords, in the clear space beside his head
+  // so they never sit on his face — and on whichever side is actually on-screen.
   const Z_SMALL = ["XXX", "..X", "XXX"];
   const Z_BIG   = ["XXXX", "...X", "..X.", ".X..", "XXXX"];
   function drawZ(px, py, rows, color){
@@ -145,14 +152,18 @@
       }
     });
   }
-  // Puffs drift up and to the right, growing and fading as they go.
+  // Puffs drift up and outward, growing and fading as they go.
   function drawSleepZs(){
     for (let i = 0; i < 3; i++) {
       const t = (((tick / 34) + i * 0.34) % 1);
       if (t > 0.86) continue;
-      const px = Math.round(22 + t * 7);
-      const py = Math.round(5 - t * 8);
       const big = t > 0.45;
+      const w = big ? 4 : 3;
+      // Rise capped so the puffs stay inside the canvas even at a top corner.
+      const py = Math.round(4 - t * 6);
+      const px = zDir > 0
+        ? Math.round(22 + t * 6)
+        : Math.round(2 - t * 6 - w);
       drawZ(px, py, big ? Z_BIG : Z_SMALL, t > 0.68 ? '#6E6E7A' : '#C6C6D0');
     }
   }

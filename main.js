@@ -224,7 +224,11 @@ function scheduleNextMove() {
       roamTimer = setTimeout(() => {
         if (!onScreen || busy || dragging) return;
         isEating = false;
-        tell('sleep');                       // zzZ — renderer drops to a low frame rate
+        // In a corner the outer half of the window hangs off the screen, so the
+        // zzZ has to rise on the side facing the middle or you'd never see it.
+        const b = bounds();
+        const onRightEdge = pos().x > (b.xmin + b.xmax) / 2;
+        tell(onRightEdge ? 'sleep-left' : 'sleep-right');
       }, EAT_MS);
     });
   }, wait);
