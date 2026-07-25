@@ -228,7 +228,7 @@
 
   /* ============ pricing ============ */
   .pricing { padding: 10px 0 110px; position: relative; z-index: 1; }
-  .pgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+  .pgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
   .plan {
     border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
     padding: 34px 30px; position: relative;
@@ -257,6 +257,31 @@
   .plan.hot .pbtn { background: var(--text); color: var(--bg); border-color: var(--text); }
   .plan.hot .pbtn:hover { opacity: .88; }
   .psoon { margin-top: 20px; font-size: 13px; color: var(--faint); }
+
+  /* wide "bring your own key" bar under the two plans */
+  .byok {
+    margin-top: 16px; border: 1px solid var(--border); border-radius: 16px;
+    background: var(--surface); padding: 28px 30px;
+    display: flex; align-items: center; justify-content: space-between; gap: 30px; flex-wrap: wrap;
+  }
+  .byok-main { flex: 1 1 420px; min-width: 0; }
+  .byok .pname { font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+  .byok h3 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 7px 0 8px; }
+  .byok p { font-size: 14px; color: var(--muted); line-height: 1.6; max-width: 62ch; }
+  .byok p strong { color: var(--text); font-weight: 600; }
+  .byok-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .byok-tags span {
+    font-size: 12px; color: var(--faint); border: 1px solid var(--border);
+    border-radius: 100px; padding: 4px 12px; font-family: 'JetBrains Mono', monospace;
+  }
+  .byok-act { flex: 0 0 auto; display: flex; flex-direction: column; align-items: stretch; gap: 9px; }
+  .byok-act .pbtn {
+    display: block; text-align: center; font-size: 14px; font-weight: 600; white-space: nowrap;
+    border: 1px solid var(--border-strong); border-radius: 10px; padding: 11px 26px;
+    background: transparent; color: var(--text); transition: background .15s, border-color .15s;
+  }
+  .byok-act .pbtn:hover { background: var(--surface2); border-color: #43434c; }
+  .byok-act small { font-size: 12px; color: var(--faint); text-align: center; }
   .psoon strong { color: var(--muted); font-weight: 500; }
 
   /* cta */
@@ -286,6 +311,9 @@
     .app-log { height: 340px; }
     .nav-links { gap: 16px; }
     .nav-links a:not(.btn) { display: none; }
+    .pgrid { grid-template-columns: 1fr; }
+    .byok { padding: 26px 22px; gap: 22px; }
+    .byok-act { width: 100%; }
   }
 </style>
 </head>
@@ -401,7 +429,7 @@
     <div class="fgrid" id="fgrid">
       <div class="f"><span class="tag">research</span>
         <h3>Answers with receipts</h3>
-        <p>Finds and vets investors, companies, and markets using live Google Search — and cites
+        <p>Finds and vets investors, companies, and markets using live web search — and cites
         where every fact came from. He never invents a name, an email, or a number.</p></div>
       <div class="f"><span class="tag">write</span>
         <h3>Ready-to-send drafts</h3>
@@ -459,17 +487,25 @@
         </ul>
         <button class="pbtn soon" disabled>Launching soon</button>
       </div>
-      <div class="plan">
+    </div>
+
+    <div class="byok">
+      <div class="byok-main">
         <div class="pname">Bring your own key</div>
-        <div class="pprice ptext">Your key</div>
-        <div class="pper">unlimited · pay your provider</div>
-        <ul>
-          <li><strong>Unlimited</strong> messages</li>
-          <li>Works best with <strong>Claude</strong></li>
-          <li>Any provider key welcome</li>
-          <li>Stored only on your Mac</li>
-        </ul>
-        <a class="pbtn" href="https://console.anthropic.com" target="_blank" rel="noopener">Get an Anthropic key ↗</a>
+        <h3>Already pay for an AI? Use that instead.</h3>
+        <p>Paste in <strong>any AI API key you already have</strong> and the daily limit disappears —
+          you just pay your provider directly, nothing to us. The key is stored on your Mac and never
+          touches our servers. <strong>Works best with Claude.</strong></p>
+        <div class="byok-tags">
+          <span>unlimited</span>
+          <span>any provider</span>
+          <span>key stays local</span>
+          <span>no account</span>
+        </div>
+      </div>
+      <div class="byok-act">
+        <a class="pbtn" href="https://console.anthropic.com" target="_blank" rel="noopener">Get a Claude key ↗</a>
+        <small>or use a key you already own</small>
       </div>
     </div>
   </section>
@@ -489,7 +525,7 @@
 
   <footer>
     <span>© 2026 Mr. Panda · built by Shivraj</span>
-    <a href="https://github.com/ShivrajPatilHQ/Mr.Panda" target="_blank" rel="noopener">Open source on GitHub ↗</a>
+    <a href="https://github.com/ShivrajPatilHQ/Mr.Panda" target="_blank" rel="noopener">Open source (AGPL-3.0) on GitHub ↗</a>
   </footer>
 </div>
 

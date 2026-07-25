@@ -1,3 +1,13 @@
+// Mr. Panda — an AI assistant that lives on your desktop.
+// Copyright (C) 2026 EmergeSphere Technologies Pvt. Ltd.
+//
+// This program is free software: you can redistribute it and/or modify it under
+// the terms of the GNU Affero General Public License as published by the Free
+// Software Foundation, either version 3 of the License, or (at your option) any
+// later version. It is distributed WITHOUT ANY WARRANTY; without even the implied
+// warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+// Affero General Public License for more details: <https://www.gnu.org/licenses/>.
+
 // Mr. Panda — hosted backend (Phase A)
 // A small Bun + Hono server that holds the hosted Gemini key, meters free usage
 // (5/day per device), and proxies AI calls so users never need their own key.

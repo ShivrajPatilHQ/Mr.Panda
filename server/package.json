@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "author": "EmergeSphere Technologies Pvt. Ltd.",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "bun run index.ts",
     "dev": "bun --watch index.ts"
