@@ -246,6 +246,15 @@ const ipOf = (c: any) => (c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
 
 app.get('/health', (c) => c.json({ ok: true, service: 'mrpanda', db: mongoOk, time: new Date().toISOString() }));
 
+// Latest published build. Env-driven so a release is a config change, not a
+// redeploy of the app. No DB needed — this must answer even if Mongo is down.
+app.get('/v1/version', (c) => c.json({
+  ok: true,
+  version: env.LATEST_VERSION || '1.2.0',
+  notes: env.LATEST_NOTES || '',
+  url: env.LATEST_URL || 'https://mrpanda.app'
+}));
+
 app.post('/v1/register', async (c) => {
   if (!mongoOk) return c.json({ ok: false, code: 'DB_DOWN' }, 503);
   const body: any = await c.req.json().catch(() => ({}));

@@ -105,6 +105,18 @@
   .invx { position:absolute; top:6px; right:8px; cursor:pointer; color:#b55; }
   .empty { font-size:12px; color:var(--muted); text-align:center; padding:20px 0; }
   .modelrow { display:flex; gap:6px; align-items:center; }
+  .notice {
+    display:flex; align-items:center; gap:10px; padding:8px 14px;
+    font-size:12px; background:#fdf2f2; border-bottom:1px solid #f3d7d7; color:#7a2b2b;
+  }
+  .notice.upd { background:#eef4fd; border-bottom-color:#d5e2f5; color:#254b80; }
+  .notice span { flex:1; min-width:0; }
+  .notice button {
+    border:0; border-radius:7px; padding:5px 11px; font-size:12px; font-weight:600;
+    background:#1b1b21; color:#fff; cursor:pointer; font-family:inherit; white-space:nowrap;
+  }
+  .notice button:hover { opacity:.88; }
+  .notice button.x { background:transparent; color:inherit; font-size:16px; padding:2px 4px; font-weight:400; }
 </style>
 </head>
 <body>
@@ -124,6 +136,16 @@
   <div class="tabs">
     <button class="tab on" data-tab="research">Research</button>
     <button class="tab" data-tab="write">Write</button>
+  </div>
+
+  <div class="notice" id="proBar" style="display:none">
+    <span id="proText"></span>
+    <button id="proBtn">Upgrade</button>
+  </div>
+  <div class="notice upd" id="updBar" style="display:none">
+    <span id="updText"></span>
+    <button id="updBtn">Get it</button>
+    <button class="x" id="updX" aria-label="Dismiss">&times;</button>
   </div>
 
   <div id="content">
@@ -152,7 +174,23 @@
           <select id="provSel" class="in">
             <option value="anthropic">Anthropic · Claude (recommended)</option>
             <option value="gemini">Google · Gemini</option>
+            <option value="openai">OpenAI &amp; compatible</option>
           </select>
+          <div id="oaiRow" style="display:none">
+            <label class="f">Service</label>
+            <select id="oaiPreset" class="in">
+              <option value="https://api.openai.com/v1">OpenAI</option>
+              <option value="https://api.groq.com/openai/v1">Groq</option>
+              <option value="https://api.deepseek.com/v1">DeepSeek</option>
+              <option value="https://api.mistral.ai/v1">Mistral</option>
+              <option value="https://openrouter.ai/api/v1">OpenRouter</option>
+              <option value="https://api.together.xyz/v1">Together</option>
+              <option value="http://localhost:11434/v1">Ollama (local)</option>
+              <option value="__custom">Custom…</option>
+            </select>
+            <input id="oaiBase" class="in" type="text" placeholder="https://your-endpoint/v1"
+                   autocomplete="off" style="display:none; margin-top:6px" />
+          </div>
           <label class="f" id="keyLabel">Anthropic API key</label>
           <input id="keyInput" class="in" type="password" placeholder="paste your key" autocomplete="off" />
           <label class="f">Model</label>
@@ -163,7 +201,7 @@
           <div class="hint" id="keyHint">Get a key at console.anthropic.com. Saved only on this Mac, sent only to Anthropic.</div>
         </div>
 
-        <div class="toggle"><span>Search the live web</span><div class="switch" id="webSwitch"><div class="knob"></div></div></div>
+        <div class="toggle" id="webRow"><span>Search the live web</span><div class="switch" id="webSwitch"><div class="knob"></div></div></div>
         <button class="primary" id="saveKey">Save</button>
         <div class="status" id="skeyStatus"></div>
       </div>
@@ -319,17 +357,34 @@
   const keyInput = $('keyInput'), modelSel = $('modelSel'), skeyStatus = $('skeyStatus'),
         webSwitch = $('webSwitch'), hostedInfo = $('hostedInfo'), byokFields = $('byokFields'),
         modeHostedBtn = $('modeHostedBtn'), modeByokBtn = $('modeByokBtn'),
-        provSel = $('provSel'), keyLabel = $('keyLabel'), keyHint = $('keyHint');
+        provSel = $('provSel'), keyLabel = $('keyLabel'), keyHint = $('keyHint'),
+        oaiRow = $('oaiRow'), oaiPreset = $('oaiPreset'), oaiBase = $('oaiBase'), webRow = $('webRow');
   let hasKey = false, webOn = true, mode = 'hosted';
   function applyProviderUI(p){
     provSel.value = p;
+    oaiRow.style.display = p === 'openai' ? 'block' : 'none';
+    // Only Claude and Gemini can actually search — don't offer a switch that lies.
+    if (webRow) webRow.style.display = (mode === 'byok' && p === 'openai') ? 'none' : 'flex';
     if(p === 'anthropic'){
       keyLabel.textContent = 'Anthropic API key';
       keyHint.textContent = 'Get a key at console.anthropic.com. Saved only on this Mac, sent only to Anthropic.';
+    } else if(p === 'openai'){
+      keyLabel.textContent = 'API key';
+      keyHint.textContent = 'Works with any OpenAI-compatible service. Saved only on this Mac, sent only to the endpoint above. Live web search is not available on these — Claude is the one that can search.';
     } else {
       keyLabel.textContent = 'Gemini API key';
       keyHint.textContent = 'Free key at aistudio.google.com/apikey. Saved only on this Mac, sent only to Google.';
     }
+  }
+  // Preset picks the base URL; "Custom…" reveals a free-text field.
+  function applyBaseUI(url){
+    const known = [...oaiPreset.options].some(o => o.value === url);
+    oaiPreset.value = known ? url : '__custom';
+    oaiBase.style.display = known ? 'none' : 'block';
+    oaiBase.value = url || '';
+  }
+  function currentBase(){
+    return oaiPreset.value === '__custom' ? oaiBase.value.trim() : oaiPreset.value;
   }
   function setModelOptions(list, current){
     const set = new Set(list); if(current) set.add(current);
@@ -349,7 +404,8 @@
     const c = await api.getConfig();
     hasKey = !!c.hasKey; webOn = c.webSearch !== false;
     setModeUI(c.mode || 'hosted');
-    applyProviderUI(c.provider === 'gemini' ? 'gemini' : 'anthropic');
+    applyProviderUI(['gemini','openai'].indexOf(c.provider) !== -1 ? c.provider : 'anthropic');
+    applyBaseUI(c.openaiBaseUrl || 'https://api.openai.com/v1');
     webSwitch.classList.toggle('on', webOn);
     const m = c.byokModel || '';
     setModelOptions(m ? [m] : [], m);
@@ -371,19 +427,66 @@
           + ' messages left today. Model is picked for you; switch to "My own key" to choose your own.';
         statusLine.textContent = (s.remaining==null?'?':s.remaining) + '/' + (s.limit||5) + ' free today';
       }
+      showProBar(s);
     } else {
       statusLine.textContent = (hasKey ? 'online' : 'add your key') + ' · your key';
+      proBar.style.display = 'none';        // own key = no limit to upsell against
     }
   }
+
+  // The upsell only appears where the limit actually bites: free, hosted, and
+  // running low. Pro users and BYOK users never see it.
+  const proBar = $('proBar'), proText = $('proText'), updBar = $('updBar'), updText = $('updText');
+  const PRO_URL = 'https://mrpanda.app/#pricing';
+  function showProBar(s){
+    const low = s && s.plan !== 'pro' && !s.error && typeof s.remaining === 'number' && s.remaining <= 2;
+    proBar.style.display = low ? 'flex' : 'none';
+    if(!low) return;
+    proText.textContent = s.remaining === 0
+      ? "You're out of free messages for today."
+      : s.remaining + ' of ' + (s.limit||5) + ' free messages left today.';
+  }
+  $('proBtn').addEventListener('click', () => api.openUrl && api.openUrl(PRO_URL));
+
+  // Update notice: checked once on open, dismissible, never auto-installs.
+  $('updX').addEventListener('click', () => { updBar.style.display = 'none'; });
+  $('updBtn').addEventListener('click', () => api.openUrl && api.openUrl('https://mrpanda.app'));
+  (async () => {
+    if(!api.checkUpdate) return;
+    try {
+      const u = await api.checkUpdate();
+      if(u && u.ok && u.outdated){
+        updText.textContent = 'Mr. Panda ' + u.latest + ' is out (you have ' + u.current + ')'
+          + (u.notes ? ' — ' + u.notes : '');
+        updBar.style.display = 'flex';
+      }
+    } catch(_e) {}
+  })();
   modeHostedBtn.addEventListener('click', async () => { setModeUI('hosted'); await api.saveConfig({ mode: 'hosted' }); await refreshStatus(); });
   modeByokBtn.addEventListener('click', async () => { setModeUI('byok'); await api.saveConfig({ mode: 'byok' }); await refreshStatus(); });
   webSwitch.addEventListener('click', () => { webOn = !webOn; webSwitch.classList.toggle('on', webOn); api.saveConfig && api.saveConfig({ webSearch: webOn }); });
+  // The provider decides which key/model/base fields we send back.
+  const KEY_FIELD   = { anthropic:'anthropicKey',   gemini:'geminiKey',   openai:'openaiKey' };
+  const MODEL_FIELD = { anthropic:'anthropicModel', gemini:'geminiModel', openai:'openaiModel' };
   function keyPatch(){
     const patch = {};
+    const p = provSel.value;
     const k = keyInput.value.trim();
-    if(k){ patch.provider = provSel.value; if(provSel.value === 'anthropic') patch.anthropicKey = k; else patch.geminiKey = k; }
+    if(k){ patch.provider = p; patch[KEY_FIELD[p] || 'geminiKey'] = k; }
+    if(p === 'openai'){ const b = currentBase(); if(b){ patch.provider = p; patch.openaiBaseUrl = b; } }
     return patch;
   }
+  oaiPreset.addEventListener('change', async () => {
+    oaiBase.style.display = oaiPreset.value === '__custom' ? 'block' : 'none';
+    if(oaiPreset.value === '__custom'){ oaiBase.focus(); return; }
+    if(api.saveConfig) await api.saveConfig({ provider: 'openai', openaiBaseUrl: oaiPreset.value });
+    setModelOptions([], '');   // models differ per service — clear the stale list
+    skeyStatus.textContent = 'endpoint set — hit refresh for models';
+  });
+  oaiBase.addEventListener('change', async () => {
+    const b = oaiBase.value.trim();
+    if(b && api.saveConfig) await api.saveConfig({ provider: 'openai', openaiBaseUrl: b });
+  });
   provSel.addEventListener('change', async () => {
     applyProviderUI(provSel.value);
     if(api.saveConfig) await api.saveConfig({ provider: provSel.value });
@@ -391,7 +494,8 @@
   });
   modelSel.addEventListener('change', () => {
     if(!api.saveConfig || !modelSel.value || modelSel.value.startsWith('(')) return;
-    api.saveConfig(provSel.value === 'anthropic' ? { anthropicModel: modelSel.value } : { geminiModel: modelSel.value });
+    const f = MODEL_FIELD[provSel.value] || 'geminiModel';
+    api.saveConfig({ [f]: modelSel.value });
   });
   $('listModels').addEventListener('click', async () => {
     if(!api.listModels) return;
@@ -406,7 +510,7 @@
   $('saveKey').addEventListener('click', async () => {
     const patch = Object.assign({ webSearch: webOn }, keyPatch());
     if(modelSel.value && !modelSel.value.startsWith('(')){
-      if(provSel.value === 'anthropic') patch.anthropicModel = modelSel.value; else patch.geminiModel = modelSel.value;
+      patch[MODEL_FIELD[provSel.value] || 'geminiModel'] = modelSel.value;
     }
     if(api.saveConfig) await api.saveConfig(patch);
     keyInput.value=''; await refreshConfig(); closeSheets();

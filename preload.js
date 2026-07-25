@@ -28,5 +28,7 @@ contextBridge.exposeInMainWorld('panda', {
   listInvestors: () => ipcRenderer.invoke('list-investors'),
   removeInvestor: (id) => ipcRenderer.invoke('remove-investor', id),
   clearInvestors: () => ipcRenderer.invoke('clear-investors'),
-  exportCsv: () => ipcRenderer.invoke('export-csv')
+  exportCsv: () => ipcRenderer.invoke('export-csv'),
+  openUrl: (url) => ipcRenderer.send('open-url', url),
+  checkUpdate: () => ipcRenderer.invoke('check-update')
 });

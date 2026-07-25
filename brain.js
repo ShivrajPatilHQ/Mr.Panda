@@ -29,11 +29,15 @@ let cfgPath = null;
 let cfg = {
   mode: 'hosted',                  // 'hosted' | 'byok'
   deviceId: '',
-  provider: 'anthropic',           // BYOK provider: 'anthropic' (recommended) | 'gemini'
+  provider: 'anthropic',           // BYOK: 'anthropic' (recommended) | 'gemini' | 'openai'
   geminiKey: '',
   geminiModel: 'gemini-2.5-flash',
   anthropicKey: '',
   anthropicModel: 'claude-opus-4-8',
+  // 'openai' means any OpenAI-compatible API — the base URL decides who it is.
+  openaiKey: '',
+  openaiModel: 'gpt-4o',
+  openaiBaseUrl: 'https://api.openai.com/v1',
   webSearch: true
 };
 
@@ -56,12 +60,15 @@ async function init(userDataDir) {
 
 // Never expose the raw keys back to the UI — only whether one is set.
 function getConfig() {
-  const byokModel = cfg.provider === 'anthropic' ? cfg.anthropicModel : cfg.geminiModel;
-  const byokKey = cfg.provider === 'anthropic' ? cfg.anthropicKey : cfg.geminiKey;
+  const byokModel = cfg.provider === 'anthropic' ? cfg.anthropicModel
+    : cfg.provider === 'openai' ? cfg.openaiModel : cfg.geminiModel;
+  const byokKey = cfg.provider === 'anthropic' ? cfg.anthropicKey
+    : cfg.provider === 'openai' ? cfg.openaiKey : cfg.geminiKey;
   return {
     mode: cfg.mode,
     provider: cfg.provider,
     byokModel,
+    openaiBaseUrl: cfg.openaiBaseUrl || 'https://api.openai.com/v1',
     geminiModel: cfg.mode === 'hosted' ? 'hosted' : byokModel, // legacy field name kept for the UI
     hasKey: !!byokKey,
     webSearch: cfg.webSearch !== false
@@ -71,11 +78,14 @@ function getConfig() {
 function saveConfig(patch) {
   if (patch && typeof patch === 'object') {
     if (patch.mode === 'hosted' || patch.mode === 'byok') cfg.mode = patch.mode;
-    if (patch.provider === 'anthropic' || patch.provider === 'gemini') cfg.provider = patch.provider;
+    if (['anthropic', 'gemini', 'openai'].indexOf(patch.provider) !== -1) cfg.provider = patch.provider;
     if (typeof patch.geminiKey === 'string' && patch.geminiKey.trim()) cfg.geminiKey = patch.geminiKey.trim();
     if (typeof patch.geminiModel === 'string' && patch.geminiModel.trim()) cfg.geminiModel = patch.geminiModel.trim();
     if (typeof patch.anthropicKey === 'string' && patch.anthropicKey.trim()) cfg.anthropicKey = patch.anthropicKey.trim();
     if (typeof patch.anthropicModel === 'string' && patch.anthropicModel.trim()) cfg.anthropicModel = patch.anthropicModel.trim();
+    if (typeof patch.openaiKey === 'string' && patch.openaiKey.trim()) cfg.openaiKey = patch.openaiKey.trim();
+    if (typeof patch.openaiModel === 'string' && patch.openaiModel.trim()) cfg.openaiModel = patch.openaiModel.trim();
+    if (typeof patch.openaiBaseUrl === 'string' && patch.openaiBaseUrl.trim()) cfg.openaiBaseUrl = patch.openaiBaseUrl.trim();
     if (typeof patch.webSearch === 'boolean') cfg.webSearch = patch.webSearch;
   }
   persist();
@@ -85,7 +95,7 @@ function saveConfig(patch) {
 // Plan/usage status for the UI's status line. Hosted = live network check;
 // BYOK = purely local (no server involved).
 async function getStatus() {
-  if (cfg.mode !== 'hosted') return { mode: 'byok', hasKey: !!cfg.geminiKey };
+  if (cfg.mode !== 'hosted') return { mode: 'byok', hasKey: !!getConfig().hasKey };
   try {
     const res = await fetchTimeout(SERVER_URL + '/v1/me?device=' + encodeURIComponent(cfg.deviceId), {}, 10000);
     const data = await res.json().catch(() => ({}));
@@ -173,6 +183,7 @@ async function ask(history, attachments, mode) {
     return data.text;
   }
   if (cfg.provider === 'anthropic') return askClaudeDirect(history, attachments, mode);
+  if (cfg.provider === 'openai') return askOpenAICompat(history, attachments, mode);
   return askGeminiDirect(history, attachments, mode);
 }
 
@@ -182,6 +193,7 @@ async function humanize(text, mode, opts) {
     return data.text;
   }
   if (cfg.provider === 'anthropic') return humanizeClaude(text, mode, opts);
+  if (cfg.provider === 'openai') return humanizeOpenAI(text, mode, opts);
   return humanizeDirect(text, mode, opts);
 }
 
@@ -191,6 +203,7 @@ async function extractInvestors(text) {
     return data.items || [];
   }
   if (cfg.provider === 'anthropic') return extractClaudeContacts(text);
+  if (cfg.provider === 'openai') return extractOpenAIContacts(text);
   return extractInvestorsDirect(text);
 }
 
@@ -198,6 +211,7 @@ async function extractInvestors(text) {
 async function listModels() {
   if (cfg.mode === 'hosted') return [];
   if (cfg.provider === 'anthropic') return listClaudeModels();
+  if (cfg.provider === 'openai') return listOpenAIModels();
   if (!cfg.geminiKey) { const e = new Error('No API key set.'); e.code = 'NO_KEY'; throw e; }
   const url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(cfg.geminiKey);
   const res = await fetch(url);
@@ -467,6 +481,137 @@ async function humanizeClaude(text, mode, opts) {
   return out;
 }
 
+// ---- OpenAI-compatible path (BYOK — covers OpenAI, Groq, DeepSeek, Mistral,
+// OpenRouter, Together, local Ollama… anything speaking /chat/completions) ----
+const OAI_DEFAULT_BASE = 'https://api.openai.com/v1';
+
+function oaiCfg() {
+  if (!cfg.openaiKey) { const e = new Error('No API key set.'); e.code = 'NO_KEY'; throw e; }
+  const base = (cfg.openaiBaseUrl || OAI_DEFAULT_BASE).trim().replace(/\/+$/, '');
+  return { key: cfg.openaiKey, base, model: cfg.openaiModel || 'gpt-4o' };
+}
+
+async function oaiFetch(pathname, init, ms) {
+  const { key, base } = oaiCfg();
+  const res = await fetchTimeout(base + pathname, Object.assign({
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }
+  }, init), ms || 120000);
+  if (!res.ok) {
+    let detail = '';
+    try { const j = await res.json(); detail = (j.error && (j.error.message || j.error.code)) || ''; } catch (_e) {}
+    const e = new Error(res.status === 401
+      ? 'That API key was rejected — check it in Settings.'
+      : 'Provider API ' + res.status + (detail ? ': ' + String(detail).slice(0, 140) : ''));
+    e.code = res.status === 401 ? 'BAD_KEY' : 'API_ERROR';
+    throw e;
+  }
+  return res.json();
+}
+
+async function oaiChat(messages, opts) {
+  const { model } = oaiCfg();
+  const body = Object.assign({ model, messages }, opts || {});
+  const data = await oaiFetch('/chat/completions', { method: 'POST', body: JSON.stringify(body) });
+  const choice = data && data.choices && data.choices[0];
+  return {
+    text: ((choice && choice.message && choice.message.content) || '').trim(),
+    truncated: choice && choice.finish_reason === 'length'
+  };
+}
+
+// Attachments become plain text/image parts. Images ride along only if the
+// chosen model is multimodal; text and .docx always work.
+async function attachmentsToOaiParts(attachments) {
+  const parts = [];
+  for (const a of (attachments || [])) {
+    const mime = a.mime || '';
+    try {
+      if (mime.startsWith('image/')) {
+        parts.push({ type: 'image_url', image_url: { url: 'data:' + mime + ';base64,' + a.dataBase64 } });
+      } else if (mime.indexOf('wordprocessingml.document') !== -1 || /\.docx$/i.test(a.name || '')) {
+        const mammoth = require('mammoth');
+        const out = await mammoth.extractRawText({ buffer: Buffer.from(a.dataBase64, 'base64') });
+        parts.push({ type: 'text', text: 'Contents of ' + (a.name || 'document.docx') + ':\n' + (out.value || '(empty)') });
+      } else if (mime === 'application/pdf') {
+        parts.push({ type: 'text', text: '(A PDF named ' + (a.name || 'file.pdf') + ' was attached, but this provider cannot read PDFs. Ask the user to paste the text.)' });
+      } else {
+        const txt = Buffer.from(a.dataBase64, 'base64').toString('utf8');
+        parts.push({ type: 'text', text: 'Contents of ' + (a.name || 'file') + ':\n' + txt.slice(0, 100000) });
+      }
+    } catch (e) {
+      parts.push({ type: 'text', text: '(Could not read ' + (a.name || 'a file') + ': ' + (e.message || e) + ')' });
+    }
+  }
+  return parts;
+}
+
+async function askOpenAICompat(history, attachments, mode) {
+  // No hosted web-search tool here: providers expose it differently (or not at
+  // all), so be honest with the model rather than let it invent sources.
+  const sys = SYSTEM.replace(
+    'You CAN search the live web with Google Search — use it for anything current, factual, or specific (companies, investors, recent news, figures). Ground concrete facts in what you find and mention where they came from.',
+    'You CANNOT search the web on this provider. Answer from what you know, and say plainly when something needs checking against a live source.'
+  ) + (MODE_NOTE[mode] || '');
+
+  const messages = [{ role: 'system', content: sys }];
+  history.forEach(m => messages.push({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: m.text
+  }));
+
+  const parts = await attachmentsToOaiParts(attachments);
+  if (parts.length && messages.length > 1) {
+    const last = messages[messages.length - 1];
+    last.content = [{ type: 'text', text: String(last.content || '') }].concat(parts);
+  }
+
+  const r = await oaiChat(messages, { max_tokens: 8000 });
+  if (!r.text) { const e = new Error('Empty reply.'); e.code = 'EMPTY'; throw e; }
+  return r.truncated ? r.text + '\n\n…(cut off — say “continue” for the rest)' : r.text;
+}
+
+async function humanizeOpenAI(text, mode, opts) {
+  const modeText = (mode === 'custom' && opts && opts.custom) ? ('Voice: ' + opts.custom) : (HUMANIZE_MODES[mode] || HUMANIZE_MODES.human);
+  let sys = 'You rewrite text so it reads as authentically human, not AI-generated. ' +
+    'Return ONLY the rewritten text — no preamble, no quotes, no notes. Keep the original meaning and any key facts. ' +
+    'Remove every em-dash (use a comma, period, or rephrase). ' + modeText;
+  if (opts && opts.imperfect) {
+    sys += ' Add one or two small, natural human imperfections (a casual aside, a slightly informal phrasing, or a minor typo) so it does not read as machine-perfect — subtle, still readable.';
+  }
+  const r = await oaiChat(
+    [{ role: 'system', content: sys }, { role: 'user', content: text }],
+    { max_tokens: 4096, temperature: 0.9 }
+  );
+  const out = r.text.replace(/^["']|["']$/g, '');
+  if (!out) { const e = new Error('Empty rewrite.'); e.code = 'EMPTY'; throw e; }
+  return out;
+}
+
+async function extractOpenAIContacts(text) {
+  const sys = 'Extract every person or firm mentioned as an investor/contact. Reply with JSON only, ' +
+    'shaped {"contacts":[{"' + CONTACT_FIELDS.join('":"","') + '":""}]}. Use an empty string for anything ' +
+    'not stated. Never invent names, emails or numbers. If there are none, return {"contacts":[]}.';
+  let r;
+  try {
+    r = await oaiChat([{ role: 'system', content: sys }, { role: 'user', content: text }],
+      { max_tokens: 4096, response_format: { type: 'json_object' } });
+  } catch (e) {
+    // Providers that don't support response_format still do fine on the prompt.
+    if (e.code !== 'API_ERROR') throw e;
+    r = await oaiChat([{ role: 'system', content: sys }, { role: 'user', content: text }], { max_tokens: 4096 });
+  }
+  try {
+    const raw = r.text.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed.contacts) ? parsed.contacts : [];
+  } catch (_e) { return []; }
+}
+
+async function listOpenAIModels() {
+  const data = await oaiFetch('/models', {}, 30000);
+  return (data.data || []).map(m => m.id).filter(Boolean).sort();
+}
+
 const CONTACT_FIELDS = ['name', 'firm', 'stage', 'focus', 'checkSize', 'location', 'contact', 'source', 'notes'];
 const CONTACT_SCHEMA = {
   type: 'object',
@@ -518,4 +663,13 @@ async function listClaudeModels() {
   } catch (err) { throw wrapClaudeError(err); }
 }
 
-module.exports = { init, getConfig, saveConfig, getStatus, ask, listModels, extractInvestors, humanize };
+// What's the newest published build? Used only to tell the user an update
+// exists — nothing is downloaded or installed automatically.
+async function latestVersion() {
+  const res = await fetchTimeout(SERVER_URL + '/v1/version', {}, 8000);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) return null;
+  return { version: data.version, notes: data.notes, url: data.url };
+}
+
+module.exports = { init, getConfig, saveConfig, getStatus, ask, listModels, extractInvestors, humanize, latestVersion };

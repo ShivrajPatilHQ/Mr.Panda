@@ -323,6 +323,35 @@ ipcMain.on('drag-end', () => {
   if (!busy) scheduleNextMove();
 });
 
+// Only ever open our own site or a provider console — never arbitrary input.
+const URL_ALLOW = /^https:\/\/(mrpanda\.app|www\.mrpanda\.app|console\.anthropic\.com|aistudio\.google\.com|platform\.openai\.com|github\.com)(\/|$)/;
+ipcMain.on('open-url', (_e, url) => {
+  if (typeof url === 'string' && URL_ALLOW.test(url)) shell.openExternal(url);
+});
+
+// Update check: ask the backend what the latest build is. Purely informational —
+// the app never downloads or runs anything on its own.
+ipcMain.handle('check-update', async () => {
+  try {
+    const current = app.getVersion();
+    const r = await brain.latestVersion();
+    if (!r || !r.version) return { ok: false };
+    return { ok: true, current, latest: r.version, notes: r.notes || '', url: r.url || 'https://mrpanda.app',
+             outdated: isNewer(r.version, current) };
+  } catch (_e) { return { ok: false }; }
+});
+
+// Plain semver-ish compare: is a newer than b?
+function isNewer(a, b) {
+  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return true;
+    if ((pa[i] || 0) < (pb[i] || 0)) return false;
+  }
+  return false;
+}
+
 ipcMain.on('toggle-chat', toggleChat);
 ipcMain.on('close-chat', () => { if (chatOpen) toggleChat(); });
 
