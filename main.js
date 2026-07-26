@@ -65,21 +65,49 @@ const CM = IS_MAC
   ? { top: 4, bottom: 16, left: 33, right: 33 }
   : { top: 0, bottom: 0, left: 20, right: 20 };
 
-// Always measure the display the panda is actually ON — getPrimaryDisplay() puts
-// him on the wrong screen (or off it) the moment a second monitor exists.
+// Measure the display the panda is actually ON. Use his CENTRE point rather than
+// getDisplayMatching(bounds): once a window is partly off-screen, "matching" can
+// flip to another display and the reachable box jumps with it.
 function currentDisplay() {
   try {
-    if (win && !win.isDestroyed()) return screen.getDisplayMatching(win.getBounds());
+    if (win && !win.isDestroyed()) {
+      const b = win.getBounds();
+      return screen.getDisplayNearestPoint({
+        x: Math.round(b.x + b.width / 2),
+        y: Math.round(b.y + b.height / 2)
+      });
+    }
   } catch (_e) {}
   return screen.getPrimaryDisplay();
 }
 function workArea() { return currentDisplay().workArea; }
+
+// The window's REAL size, not the constants. Under Windows display scaling the
+// actual bounds can differ from what we asked for, and computing the right/bottom
+// limits from a stale size is exactly how he ends up walking off the screen.
+function winSize() {
+  try {
+    if (win && !win.isDestroyed()) {
+      const b = win.getBounds();
+      if (b.width > 0 && b.height > 0) return { w: b.width, h: b.height };
+    }
+  } catch (_e) {}
+  return { w: WIN_W, h: WIN_H };
+}
+
 function bounds() {
   const wa = workArea();
-  return {
-    xmin: wa.x - CM.left, xmax: wa.x + wa.width - WIN_W + CM.right,
-    ymin: wa.y - CM.top,  ymax: wa.y + wa.height - WIN_H + CM.bottom
+  const { w, h } = winSize();
+  const b = {
+    xmin: wa.x - CM.left, xmax: wa.x + wa.width - w + CM.right,
+    ymin: wa.y - CM.top,  ymax: wa.y + wa.height - h + CM.bottom
   };
+  // If anything above produced a nonsense box (a display we mis-read, a window
+  // bigger than the work area), collapse it to something safely on-screen rather
+  // than letting him roam into coordinates that do not exist.
+  if (!(b.xmax > b.xmin)) { b.xmin = wa.x; b.xmax = Math.max(wa.x, wa.x + wa.width - w); }
+  if (!(b.ymax > b.ymin)) { b.ymin = wa.y; b.ymax = Math.max(wa.y, wa.y + wa.height - h); }
+  return b;
 }
 
 // Printed once at startup and whenever he settles, so a bug report from another
@@ -309,6 +337,47 @@ function makeTrayIcon() {
   return img;
 }
 
+// Everything I'd ask for in a bug report, on the clipboard in one click — no
+// terminal needed. Includes a live paste self-test so we can tell "the keystroke
+// failed" apart from "the keystroke worked but went to the wrong window".
+async function diagnostics() {
+  const d = currentDisplay();
+  const all = screen.getAllDisplays().map(x => ({ id: x.id, scale: x.scaleFactor, bounds: x.bounds, workArea: x.workArea }));
+  let keyTest;
+  try { keyTest = await runKey('c'); } catch (e) { keyTest = { ok: false, error: String(e && e.message || e) }; }
+  let wb = null;
+  try { wb = win && !win.isDestroyed() ? win.getBounds() : null; } catch (_e) {}
+  // Ask for a position we know, then read it straight back: any difference means
+  // the OS is not honouring our coordinates, which breaks every movement calc.
+  let roundTrip = null;
+  try {
+    if (wb) {
+      const probe = { x: wb.x, y: wb.y };
+      win.setPosition(probe.x, probe.y);
+      const after = win.getBounds();
+      roundTrip = { asked: probe, got: { x: after.x, y: after.y },
+                    exact: after.x === probe.x && after.y === probe.y };
+    }
+  } catch (_e) {}
+  return {
+    app: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    electron: process.versions.electron,
+    sessionType: process.env.XDG_SESSION_TYPE || null,
+    currentDisplay: { id: d.id, scale: d.scaleFactor, bounds: d.bounds, workArea: d.workArea },
+    allDisplays: all,
+    windowBounds: wb,
+    reachable: bounds(),
+    windowSizeUsed: winSize(),
+    corners: (() => { const b = bounds(); return [
+      { x: b.xmin, y: b.ymin }, { x: b.xmax, y: b.ymin },
+      { x: b.xmin, y: b.ymax }, { x: b.xmax, y: b.ymax }]; })(),
+    positionRoundTrip: roundTrip,
+    keystrokeSelfTest: keyTest
+  };
+}
+
 function createTray() {
   try { tray = new Tray(makeTrayIcon()); }
   catch (_e) { tray = new Tray(nativeImage.createEmpty()); tray.setTitle('🐼'); }
@@ -316,6 +385,17 @@ function createTray() {
   tray.on('click', toggleScreen);
   tray.on('right-click', () => tray.popUpContextMenu(Menu.buildFromTemplate([
     { label: onScreen ? 'Send to menu bar' : 'Bring to screen', click: toggleScreen },
+    { type: 'separator' },
+    { label: 'Copy diagnostics', click: async () => {
+        try {
+          const info = JSON.stringify(await diagnostics(), null, 2);
+          clipboard.writeText(info);
+          dialog.showMessageBox({ type: 'info', message: 'Diagnostics copied',
+            detail: 'Paste them to whoever asked for them.', buttons: ['OK'] });
+        } catch (e) {
+          dialog.showMessageBox({ type: 'error', message: 'Could not gather diagnostics', detail: String(e && e.message || e) });
+        }
+      } },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() }
   ])));
@@ -408,6 +488,11 @@ ipcMain.on('close-chat', () => { if (chatOpen) toggleChat(); });
 ipcMain.on('hide-to-tray', () => { if (onScreen) toggleScreen(); });
 ipcMain.on('show-context-menu', () => Menu.buildFromTemplate([
   { label: 'Mr. Panda 🐼', enabled: false },
+  { label: 'Copy diagnostics', click: async () => {
+      try { clipboard.writeText(JSON.stringify(await diagnostics(), null, 2));
+            dialog.showMessageBox({ type: 'info', message: 'Diagnostics copied', buttons: ['OK'] }); }
+      catch (_e) {}
+    } },
   { type: 'separator' },
   { label: 'Send to menu bar', click: () => { if (onScreen) toggleScreen(); } },
   { label: 'Quit', click: () => app.quit() }
@@ -465,14 +550,25 @@ function runKey(letter) {
       cmd = `osascript -e 'tell application "System Events" to keystroke "${l}" using command down'`;
     } else if (IS_WIN) {
       // ^ is Ctrl in SendKeys. -NoProfile keeps it fast and predictable.
-      cmd = `powershell -NoProfile -WindowStyle Hidden -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^${l}')"`;
+      // PowerShell exits 0 even when SendKeys silently does nothing, so make it
+      // say so explicitly and check for the marker.
+      cmd = `powershell -NoProfile -NonInteractive -WindowStyle Hidden -Command ` +
+            `"try { Add-Type -AssemblyName System.Windows.Forms; ` +
+            `[System.Windows.Forms.SendKeys]::SendWait('^${l}'); Write-Output 'PANDA_OK' } ` +
+            `catch { Write-Output ('PANDA_ERR ' + $_.Exception.Message) }"`;
     } else {
       cmd = `xdotool key --clearmodifiers ctrl+${l}`;
     }
 
     // windowsHide stops a PowerShell console flashing up and stealing the very
     // foreground focus we just handed back to the user's app.
-    exec(cmd, { windowsHide: true, timeout: 10000 }, (err, _o, stderr) => {
+    exec(cmd, { windowsHide: true, timeout: 10000 }, (err, stdout, stderr) => {
+      const out = String(stdout || '');
+      if (IS_WIN && !err) {
+        if (out.indexOf('PANDA_OK') !== -1) return resolve({ ok: true });
+        const detail = (out.match(/PANDA_ERR (.*)/) || [])[1] || 'SendKeys did nothing';
+        return resolve({ ok: false, code: 'KEY_FAILED', error: detail.slice(0, 140) });
+      }
       if (!err) return resolve({ ok: true });
       const msg = ((stderr || err.message || '') + '').toLowerCase();
       if (/assistive|not allowed|accessibility|1719|-25211/.test(msg)) return resolve({ ok: false, code: 'NO_PERMISSION' });

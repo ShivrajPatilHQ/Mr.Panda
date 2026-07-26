@@ -317,7 +317,12 @@
     if(api.copyText) mk('Copy', (el)=>{ api.copyText(text); el.textContent='Copied'; setTimeout(()=>el.textContent='Copy',1200); });
     if(tab === 'write' && api.pasteIntoBox) mk('Paste into box', async (el)=>{
       el.textContent='pasting…'; const r = await api.pasteIntoBox(text);
-      el.textContent = r&&r.ok ? 'Pasted' : (r&&r.code==='NO_PERMISSION' ? 'needs access' : 'failed');
+      el.textContent = r&&r.ok ? 'Pasted'
+        : (r&&r.code==='NO_PERMISSION') ? 'needs access'
+        : (r&&r.code==='KEY_FAILED')    ? 'paste blocked'
+        : (r&&r.code==='NO_TOOL')       ? 'install xdotool'
+        : 'failed';
+      if(r && !r.ok && r.error) el.title = r.error;   // hover shows the real reason
       if(r&&r.code==='NO_PERMISSION' && api.openAccessibility) api.openAccessibility();
       setTimeout(()=>el.textContent='Paste into box',1800);
     });
