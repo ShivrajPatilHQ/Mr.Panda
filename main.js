@@ -59,15 +59,38 @@ const ROAM_STALL_MS = 90000;  // watchdog: nothing happened this long => re-arm
 
 // Transparent margin between the window edges and the visible panda. Roaming
 // uses these so the SPRITE (not the window) reaches the screen edges and top.
-const CM = { top: 4, bottom: 16, left: 33, right: 33 };
+// Windows draws the taskbar right at the bottom edge and is less forgiving about
+// off-screen windows, so he tucks in rather than hanging over the edge there.
+const CM = IS_MAC
+  ? { top: 4, bottom: 16, left: 33, right: 33 }
+  : { top: 0, bottom: 0, left: 20, right: 20 };
 
-function workArea() { return screen.getPrimaryDisplay().workArea; }
+// Always measure the display the panda is actually ON — getPrimaryDisplay() puts
+// him on the wrong screen (or off it) the moment a second monitor exists.
+function currentDisplay() {
+  try {
+    if (win && !win.isDestroyed()) return screen.getDisplayMatching(win.getBounds());
+  } catch (_e) {}
+  return screen.getPrimaryDisplay();
+}
+function workArea() { return currentDisplay().workArea; }
 function bounds() {
   const wa = workArea();
   return {
     xmin: wa.x - CM.left, xmax: wa.x + wa.width - WIN_W + CM.right,
     ymin: wa.y - CM.top,  ymax: wa.y + wa.height - WIN_H + CM.bottom
   };
+}
+
+// Printed once at startup and whenever he settles, so a bug report from another
+// machine carries the actual numbers instead of a description.
+function logGeometry(tag) {
+  try {
+    const d = currentDisplay(), b = bounds();
+    console.log('[geom:' + tag + '] platform=%s scale=%s workArea=%j reachable=%j win=%j',
+      process.platform, d.scaleFactor, d.workArea, b,
+      (win && !win.isDestroyed()) ? win.getBounds() : null);
+  } catch (e) { console.log('[geom] failed', e.message); }
 }
 
 function createWindow() {
@@ -83,8 +106,15 @@ function createWindow() {
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.loadFile('index.html');
 
+  // Spawn mid-right, not in a corner: starting in a corner meant his first trip
+  // was a 30px shuffle, which reads as "he doesn't walk anywhere".
   const wa = workArea();
-  win.setBounds({ x: wa.x + wa.width - WIN_W - 30, y: wa.y + wa.height - WIN_H - 30, width: WIN_W, height: WIN_H });
+  win.setBounds({
+    x: Math.round(wa.x + wa.width - WIN_W - 30),
+    y: Math.round(wa.y + wa.height / 2 - WIN_H / 2),
+    width: WIN_W, height: WIN_H
+  });
+  logGeometry('startup');
 
   win.webContents.on('did-finish-load', () => { idleSince = Date.now(); scheduleNextMove(); startRoamWatchdog(); });
 }
@@ -142,7 +172,11 @@ function tell(state) { if (win && !win.isDestroyed()) win.webContents.send('stat
 // setPosition throws on NaN/Infinity or a dead window — never let that crash the app.
 function safeSetPos(x, y) {
   if (!win || win.isDestroyed() || !Number.isFinite(x) || !Number.isFinite(y)) return;
-  win.setPosition(Math.round(x), Math.round(y));
+  // Clamp every single move. Anything that miscomputes a target (a display with
+  // a different scale factor, a stale work area) can otherwise walk him off the
+  // screen entirely, which is exactly what happened on Windows.
+  const p = clamp(x, y);
+  win.setPosition(Math.round(p.x), Math.round(p.y));
 }
 function clamp(x, y) {
   const b = bounds();
@@ -225,6 +259,7 @@ function scheduleNextMove() {
     const c = nearestCorner();
     walkTo(c.x, c.y, () => {
       settled = true; isEating = true; tell('eat');
+      logGeometry('settled');
       clearTimeout(roamTimer);
       roamTimer = setTimeout(() => {
         if (!onScreen || busy || dragging) return;
@@ -435,7 +470,9 @@ function runKey(letter) {
       cmd = `xdotool key --clearmodifiers ctrl+${l}`;
     }
 
-    exec(cmd, (err, _o, stderr) => {
+    // windowsHide stops a PowerShell console flashing up and stealing the very
+    // foreground focus we just handed back to the user's app.
+    exec(cmd, { windowsHide: true, timeout: 10000 }, (err, _o, stderr) => {
       if (!err) return resolve({ ok: true });
       const msg = ((stderr || err.message || '') + '').toLowerCase();
       if (/assistive|not allowed|accessibility|1719|-25211/.test(msg)) return resolve({ ok: false, code: 'NO_PERMISSION' });
@@ -447,12 +484,26 @@ function runKey(letter) {
   });
 }
 function runPaste() { return runKey('v'); }
-// Step out of the way so the OS returns focus to whatever the user was typing
-// in. macOS has app.hide(); elsewhere we just drop focus from our own windows.
+// Step out of the way so the OS puts focus back on whatever the user was typing
+// in — SendKeys/AppleScript type into the FOREGROUND window, so if we are still
+// it, the panda pastes into himself.
+// macOS has app.hide(). On Windows a blur() is not enough: the window keeps
+// foreground, so we actually hide both windows, which hands focus to the next
+// window in the z-order — the app the user came from.
+let hiddenForPaste = false;
 function yieldFocus() {
   if (IS_MAC) { try { app.hide(); } catch (_e) {} return; }
-  try { if (chatWin && !chatWin.isDestroyed()) chatWin.blur(); } catch (_e) {}
-  try { if (win && !win.isDestroyed()) win.blur(); } catch (_e) {}
+  hiddenForPaste = true;
+  try { if (chatWin && !chatWin.isDestroyed() && chatWin.isVisible()) chatWin.hide(); } catch (_e) {}
+  try { if (win && !win.isDestroyed() && win.isVisible()) win.hide(); } catch (_e) {}
+}
+function reclaimFocus(showChat) {
+  if (IS_MAC) { try { app.show(); } catch (_e) {} return; }
+  if (!hiddenForPaste) return;
+  hiddenForPaste = false;
+  // showInactive so we don't steal focus straight back off the app we just typed into.
+  try { if (win && !win.isDestroyed()) win.showInactive(); } catch (_e) {}
+  try { if (showChat && chatWin && !chatWin.isDestroyed()) chatWin.showInactive(); } catch (_e) {}
 }
 
 ipcMain.handle('paste-into-box', async (_e, text) => {
@@ -462,16 +513,20 @@ ipcMain.handle('paste-into-box', async (_e, text) => {
   await new Promise(r => setTimeout(r, 400));
   const result = await runPaste();
   await new Promise(r => setTimeout(r, 150));
-  if (IS_MAC) { try { app.show(); } catch (_e) {} }
-  try { if (win && !win.isDestroyed()) win.showInactive(); } catch (_e) {}
-  try { if (chatWasOpen && chatWin && !chatWin.isDestroyed()) chatWin.show(); } catch (_e) {}
+  reclaimFocus(chatWasOpen);
+  if (IS_MAC) {
+    try { if (win && !win.isDestroyed()) win.showInactive(); } catch (_e) {}
+    try { if (chatWasOpen && chatWin && !chatWin.isDestroyed()) chatWin.show(); } catch (_e) {}
+  }
   return result;
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function restoreApp(showChat) {
-  if (IS_MAC) { try { app.show(); } catch (_e) {} }
-  try { if (win && !win.isDestroyed()) win.showInactive(); } catch (_e) {}
-  try { if (showChat && chatWin && !chatWin.isDestroyed()) chatWin.show(); } catch (_e) {}
+  reclaimFocus(showChat);
+  if (IS_MAC) {
+    try { if (win && !win.isDestroyed()) win.showInactive(); } catch (_e) {}
+    try { if (showChat && chatWin && !chatWin.isDestroyed()) chatWin.show(); } catch (_e) {}
+  }
 }
 
 // Humanize: grab the user's selection (Cmd+C), rewrite it via the brain, and
