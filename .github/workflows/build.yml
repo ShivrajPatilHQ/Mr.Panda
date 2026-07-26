@@ -34,12 +34,13 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
 
+      # --publish never is required: on CI electron-builder otherwise tries to
+      # publish a release itself and dies with "GitHub Personal Access Token is
+      # not set". We attach artifacts explicitly below instead, so a failed
+      # build can never overwrite a good release.
       - name: Build
-        run: npm run ${{ matrix.script }}
+        run: npm run ${{ matrix.script }} -- --publish never
         env:
-          # Never let electron-builder try to publish on its own — we attach
-          # artifacts explicitly below so a bad build can't overwrite a release.
-          EP_DRAFT: true
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Upload build artifact
