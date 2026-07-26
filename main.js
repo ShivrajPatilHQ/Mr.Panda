@@ -27,6 +27,11 @@ const store = require('./store');
 process.on('uncaughtException', (err) => console.error('[main] uncaught:', (err && err.stack) || err));
 process.on('unhandledRejection', (err) => console.error('[main] unhandledRejection:', (err && err.stack) || err));
 
+// ---- platform ----
+const IS_MAC = process.platform === 'darwin';
+const IS_WIN = process.platform === 'win32';
+const IS_WAYLAND = !IS_MAC && !IS_WIN && !!(process.env.WAYLAND_DISPLAY || /wayland/i.test(process.env.XDG_SESSION_TYPE || ''));
+
 let win, chatWin, tray;
 let histories = { research: [], write: [] };   // separate conversation per tab
 
@@ -256,8 +261,16 @@ function makeTrayIcon() {
   disc(9, 10, 6.5);  // head
   disc(4, 4, 2.6);   // left ear
   disc(14, 4, 2.6);  // right ear
+  // macOS template images are alpha-only and get tinted by the menu bar. Windows
+  // and Linux draw the actual pixels, so an alpha-only bitmap would be a black
+  // panda on a black taskbar — paint it white there instead.
+  if (!IS_MAC) {
+    for (let i = 0; i < buf.length; i += 4) {
+      if (buf[i + 3]) { buf[i] = 255; buf[i + 1] = 255; buf[i + 2] = 255; }
+    }
+  }
   const img = nativeImage.createFromBitmap(buf, { width: s, height: s });
-  img.setTemplateImage(true); // adapts to light/dark menu bar
+  if (IS_MAC) img.setTemplateImage(true); // adapts to light/dark menu bar
   return img;
 }
 
@@ -395,46 +408,68 @@ ipcMain.on('reset-chat', (_e, mode) => {
 });
 ipcMain.on('copy-text', (_e, text) => clipboard.writeText(String(text || '')));
 
-// Paste a draft into whatever field the user has focused (Gmail, LinkedIn, any app).
-// Puts the text on the clipboard, then fires the system Cmd+V via AppleScript.
-// Needs the one-time macOS Accessibility permission.
-function runPaste() {
+// ---- cross-platform "press the modifier + a letter" ----
+// This is how the panda types into OTHER apps: put text on the clipboard, then
+// synthesise the paste/copy shortcut in whatever window has focus.
+//   macOS   — AppleScript via System Events (needs the Accessibility permission)
+//   Windows — PowerShell SendKeys (no permission prompt)
+//   Linux   — xdotool on X11; Wayland forbids synthetic input entirely
+
+function runKey(letter) {
   return new Promise((resolve) => {
-    exec(`osascript -e 'tell application "System Events" to keystroke "v" using command down'`, (err, _out, stderr) => {
+    const l = String(letter || '').toLowerCase();
+    if (!/^[a-z]$/.test(l)) return resolve({ ok: false, error: 'bad key' });   // never interpolate arbitrary input
+
+    if (IS_WAYLAND) {
+      return resolve({ ok: false, code: 'NO_PERMISSION',
+        error: 'Wayland blocks apps from typing into other windows. Copy and paste manually, or log in with an X11 session.' });
+    }
+
+    let cmd;
+    if (IS_MAC) {
+      cmd = `osascript -e 'tell application "System Events" to keystroke "${l}" using command down'`;
+    } else if (IS_WIN) {
+      // ^ is Ctrl in SendKeys. -NoProfile keeps it fast and predictable.
+      cmd = `powershell -NoProfile -WindowStyle Hidden -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^${l}')"`;
+    } else {
+      cmd = `xdotool key --clearmodifiers ctrl+${l}`;
+    }
+
+    exec(cmd, (err, _o, stderr) => {
       if (!err) return resolve({ ok: true });
       const msg = ((stderr || err.message || '') + '').toLowerCase();
       if (/assistive|not allowed|accessibility|1719|-25211/.test(msg)) return resolve({ ok: false, code: 'NO_PERMISSION' });
-      resolve({ ok: false, error: (stderr || err.message || 'paste failed').slice(0, 140) });
+      if (/not found|no such file|command not found/.test(msg) && !IS_MAC && !IS_WIN) {
+        return resolve({ ok: false, code: 'NO_TOOL', error: 'Install xdotool to let the panda paste into other apps.' });
+      }
+      resolve({ ok: false, error: (stderr || err.message || 'failed').slice(0, 140) });
     });
   });
 }
+function runPaste() { return runKey('v'); }
+// Step out of the way so the OS returns focus to whatever the user was typing
+// in. macOS has app.hide(); elsewhere we just drop focus from our own windows.
+function yieldFocus() {
+  if (IS_MAC) { try { app.hide(); } catch (_e) {} return; }
+  try { if (chatWin && !chatWin.isDestroyed()) chatWin.blur(); } catch (_e) {}
+  try { if (win && !win.isDestroyed()) win.blur(); } catch (_e) {}
+}
+
 ipcMain.handle('paste-into-box', async (_e, text) => {
   if (typeof text === 'string' && text) clipboard.writeText(text);
   const chatWasOpen = chatOpen;
-  // Hide our app so macOS returns focus to the app the user was in before the
-  // panda (with its text cursor intact) — then paste there, then come back.
-  try { app.hide(); } catch (_e) {}
+  yieldFocus();
   await new Promise(r => setTimeout(r, 400));
   const result = await runPaste();
   await new Promise(r => setTimeout(r, 150));
-  try { app.show(); } catch (_e) {}
+  if (IS_MAC) { try { app.show(); } catch (_e) {} }
   try { if (win && !win.isDestroyed()) win.showInactive(); } catch (_e) {}
   try { if (chatWasOpen && chatWin && !chatWin.isDestroyed()) chatWin.show(); } catch (_e) {}
   return result;
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-function runKey(letter) {
-  return new Promise((resolve) => {
-    exec(`osascript -e 'tell application "System Events" to keystroke "${letter}" using command down'`, (err, _o, stderr) => {
-      if (!err) return resolve({ ok: true });
-      const msg = ((stderr || err.message || '') + '').toLowerCase();
-      if (/assistive|not allowed|accessibility|1719|-25211/.test(msg)) return resolve({ ok: false, code: 'NO_PERMISSION' });
-      resolve({ ok: false, error: (stderr || err.message || 'failed').slice(0, 140) });
-    });
-  });
-}
 function restoreApp(showChat) {
-  try { app.show(); } catch (_e) {}
+  if (IS_MAC) { try { app.show(); } catch (_e) {} }
   try { if (win && !win.isDestroyed()) win.showInactive(); } catch (_e) {}
   try { if (showChat && chatWin && !chatWin.isDestroyed()) chatWin.show(); } catch (_e) {}
 }
@@ -447,7 +482,7 @@ ipcMain.handle('humanize', async (_e, payload) => {
   const opts = { imperfect: !!(payload && payload.imperfect), custom: payload && payload.custom };
   const chatWasOpen = chatOpen;
 
-  try { app.hide(); } catch (_e) {}          // hand focus (and the live selection) back
+  yieldFocus();                              // hand focus (and the live selection) back
   await sleep(380);
 
   const sentinel = '__panda_nosel_' + Date.now();
@@ -470,7 +505,7 @@ ipcMain.handle('humanize', async (_e, payload) => {
 });
 
 ipcMain.on('open-accessibility', () =>
-  shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'));
+  IS_MAC && shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'));
 
 // ---- saved investors (Phase 5) ----
 ipcMain.handle('save-from-reply', async (_e, text) => {

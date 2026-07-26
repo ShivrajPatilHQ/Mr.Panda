@@ -13,7 +13,23 @@ Built for founders doing outreach. Free to use, open source, and self-hostable.
 curl -fsSL https://raw.githubusercontent.com/ShivrajPatilHQ/Mr.Panda/main/install.sh | bash
 ```
 
-macOS (Apple Silicon). Installs in about 15 seconds, no API key needed.
+macOS (Apple Silicon or Intel). Installs in about 15 seconds, no API key needed.
+
+**Windows:** download `Mr.Panda-Setup.exe` from the
+[latest release](https://github.com/ShivrajPatilHQ/Mr.Panda/releases/latest).
+
+**Linux:** download the `.AppImage` from the same page, `chmod +x` it and run it.
+Note that Wayland forbids applications from moving their own windows, so the panda
+will sit still there — use an X11 session if you want him to roam. Typing into other
+apps also needs `xdotool`, which is X11-only.
+
+### Platform support
+
+| | macOS | Windows | Linux |
+|---|---|---|---|
+| Panda roams, chat, research, writing | ✅ | ✅ | X11 only |
+| Paste into any app / Humanize a selection | ✅ | ✅ | needs `xdotool`, X11 only |
+| Tested by us | ✅ | beta | community |
 
 ## How it works
 

@@ -9,7 +9,14 @@ c() { printf '\033[%sm' "$1"; }
 R="$(c 0)"; B="$(c 1)"; DIM="$(c 2)"; GOLD="$(c '38;5;179')"; RED="$(c '38;5;131')"
 
 if [ "$(uname -s)" != "Darwin" ]; then
-  echo "Mr. Panda is currently macOS-only. Sorry!"
+  echo "This installer is for macOS."
+  echo
+  echo "  Windows: download Mr.Panda-Setup.exe from"
+  echo "           https://github.com/$REPO/releases/latest"
+  echo "  Linux:   download the .AppImage from the same page, then"
+  echo "           chmod +x Mr.Panda-*.AppImage && ./Mr.Panda-*.AppImage"
+  echo "           (needs an X11 session — Wayland blocks the panda from moving)"
+  echo
   exit 1
 fi
 
